@@ -87,7 +87,7 @@ void _mjPRIVATE__set_tls_warning_fn(callback_fn h) {
   _mjPRIVATE_tls_warning_fn = h;
 }
 
-//------------------------------ error hadling
+//------------------------------ error handling
 //-----------------------------------------------------
 
 // write datetime, type: message to MUJOCO_LOG.TXT

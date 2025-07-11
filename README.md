@@ -80,7 +80,7 @@ and macOS (universal). This is the recommended way to use the software.
 
 ### Building from source
 
-#### For other platform
+#### For other platforms
 
 Users who wish to build MuJoCo from source should consult the [build from
 source] section of the documentation. However, note that the commit at
