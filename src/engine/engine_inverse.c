@@ -31,6 +31,7 @@
 #include "engine/engine_support.h"
 #include "engine/engine_util_blas.h"
 #include "engine/engine_util_errmem.h"
+#include "engine/engine_util_misc.h"
 #include "engine/engine_util_sparse.h"
 
 // position-dependent computations
@@ -45,9 +46,8 @@ void mj_invPosition(const mjModel* m, mjData* d) {
   mj_tendon(m, d);
   TM_END(mjTIMER_POS_KINEMATICS);
 
-  mj_crb(m, d);             // timed internally (POS_INERTIA)
-  mj_tendonArmature(m, d);  // timed internally (POS_INERTIA)
-  mj_factorM(m, d);         // timed internally (POS_INERTIA)
+  mj_makeM(m, d);      // timed internally (POS_INERTIA)
+  mj_factorM(m, d);    // timed internally (POS_INERTIA)
 
   mj_collision(m, d);  // timed internally (POS_COLLISION)
 
@@ -115,10 +115,8 @@ static void mj_discreteAcc(const mjModel* m, mjData* d) {
     // compute qDeriv
     mjd_smooth_vel(m, d, /* flg_bias = */ 1);
 
-    // set qLU = qM
-    for (int i=0; i < nD; i++) {
-      d->qLU[i] = d->qM[d->mapM2D[i]];
-    }
+    // gather qLU <- qM (lower to full)
+    mju_gather(d->qLU, d->qM, d->mapM2D, nD);
 
     // set qLU = qM - dt*qDeriv
     mju_addToScl(d->qLU, d->qDeriv, -m->opt.timestep, m->nD);
@@ -228,15 +226,22 @@ void mj_inverseSkip(const mjModel* m, mjData* d,
 
   // acceleration-dependent
   mj_invConstraint(m, d);
-  mj_rne(m, d, 1, d->qfrc_inverse);
+
+  // sum of bias forces in qfrc_inverse = centripetal + Coriolis + tendon bias
+  mj_rne(m, d, 0, d->qfrc_inverse);
+  mj_tendonBias(m, d, d->qfrc_inverse);
+
   if (!skipsensor) {
     mj_sensorAcc(m, d);
   }
 
-  // qfrc_inverse += armature*qacc - qfrc_passive - qfrc_constraint
+  // compute Ma = M*qacc
+  mjtNum* Ma = mjSTACKALLOC(d, nv, mjtNum);
+  mj_mulM(m, d, Ma, d->qacc);
+
+  // qfrc_inverse += Ma - qfrc_passive - qfrc_constraint
   for (int i=0; i < nv; i++) {
-    d->qfrc_inverse[i] += m->dof_armature[i]*d->qacc[i]
-                          - d->qfrc_passive[i] - d->qfrc_constraint[i];
+    d->qfrc_inverse[i] += Ma[i] - d->qfrc_passive[i] - d->qfrc_constraint[i];
   }
 
   if (mjENABLED(mjENBL_INVDISCRETE)) {

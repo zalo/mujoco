@@ -51,7 +51,11 @@ MJAPI mjtNum mju_muscleDynamicsTimescale(mjtNum dctrl, mjtNum tau_act, mjtNum ta
 MJAPI mjtNum mju_muscleDynamics(mjtNum ctrl, mjtNum act, const mjtNum prm[3]);
 
 // all 3 semi-axes of a geom
-MJAPI void mju_geomSemiAxes(const mjModel* m, int geom_id, mjtNum semiaxes[3]);
+MJAPI void mju_geomSemiAxes(mjtNum semiaxes[3], const mjtNum size[3], mjtGeom type);
+
+// return 1 if point is inside a primitive geom, 0 otherwise
+int mju_insideGeom(const mjtNum pos[3], const mjtNum mat[9], const mjtNum size[3], mjtGeom type,
+                   const mjtNum point[3]);
 
 // ----------------------------- Flex interpolation ------------------------------------------------
 
@@ -155,6 +159,18 @@ MJAPI void mju_d2n(mjtNum* res, const double* vec, int n);
 
 // convert from mjtNum to double
 MJAPI void mju_n2d(double* res, const mjtNum* vec, int n);
+
+// gather mjtNums
+MJAPI void mju_gather(mjtNum* res, const mjtNum* vec, const int* ind, int n);
+
+// scatter mjtNums
+MJAPI void mju_scatter(mjtNum* res, const mjtNum* vec, const int* ind, int n);
+
+// gather integers
+MJAPI void mju_gatherInt(int* res, const int* vec, const int* ind, int n);
+
+// scatter integers
+MJAPI void mju_scatterInt(int* res, const int* vec, const int* ind, int n);
 
 // insertion sort, increasing order
 MJAPI void mju_insertionSort(mjtNum* list, int n);

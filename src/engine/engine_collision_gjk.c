@@ -17,6 +17,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <mujoco/mjtnum.h>
 #include <mujoco/mjmodel.h>
@@ -30,11 +31,10 @@
 // subdistance algorithm for GJK that computes the barycentric coordinates of the point in a
 // simplex closest to the origin
 // implementation adapted from Montanari et al, ToG 2017
-static void subdistance(mjtNum lambda[4], int n, const mjtNum s1[3], const mjtNum s2[3],
-                        const mjtNum s3[3], const mjtNum s4[3]);
+static void subdistance(mjtNum lambda[4], int n, const Vertex simplex[4]);
 
 // compute the barycentric coordinates of the closest point to the origin in the n-simplex,
-// where n = 3, 2, 1 respectively
+// for n = 3, 2, 1 respectively
 static void S3D(mjtNum lambda[4], const mjtNum s1[3], const mjtNum s2[3], const mjtNum s3[3],
                 const mjtNum s4[3]);
 static void S2D(mjtNum lambda[3], const mjtNum s1[3], const mjtNum s2[3], const mjtNum s3[3]);
@@ -42,7 +42,7 @@ static void S1D(mjtNum lambda[2], const mjtNum s1[3], const mjtNum s2[3]);
 
 // compute the support point for GJK
 static void gjkSupport(Vertex* v, mjCCDObj* obj1, mjCCDObj* obj2,
-                       const mjtNum x_k[3]);
+                       const mjtNum x_k[3], mjtNum x_norm);
 
 // compute the linear combination of 1 - 4 3D vectors
 static inline void lincomb(mjtNum res[3], const mjtNum* coef, int n, const mjtNum v1[3],
@@ -59,18 +59,18 @@ typedef struct {
 
 // polytope used in the Expanding Polytope Algorithm (EPA)
 typedef struct {
-  Vertex* verts;     // list of vertices that make up the polytope
-  int nverts;        // number of vertices
-  Face* faces;       // list of faces that make up the polytope
-  int nfaces;        // number of faces
-  int maxfaces;      // max number of faces that can be stored in polytope
-  Face** map;        // linear map storing faces
-  int nmap;          // number of faces in map
-  struct Horizon {   // polytope boundary edges that can be seen from w
-    int* indices;    // indices of faces on horizon
-    int* edges;      // corresponding edge of each face on the horizon
-    int nedges;      // number of edges in horizon
-    mjtNum* w;       // point where horizon is created
+  Vertex* verts;      // list of vertices that make up the polytope
+  int nverts;         // number of vertices
+  Face* faces;        // list of faces that make up the polytope
+  int nfaces;         // number of faces
+  int maxfaces;       // max number of faces that can be stored in polytope
+  Face** map;         // linear map storing faces
+  int nmap;           // number of faces in map
+  struct Horizon {    // polytope boundary edges that can be seen from w
+    int* indices;     // indices of faces on horizon
+    int* edges;       // corresponding edge of each face on the horizon
+    int nedges;       // number of edges in horizon
+    const mjtNum* w;  // point where horizon is created
   } horizon;
 } Polytope;
 
@@ -182,21 +182,27 @@ static void gjk(mjCCDStatus* status, mjCCDObj* obj1, mjCCDObj* obj2) {
   mjtNum cutoff2 = status->dist_cutoff * status->dist_cutoff;
 
   // if both geoms are discrete, finite convergence is guaranteed; set tolerance to 0
-  mjtNum epsilon = discreteGeoms(obj1, obj2) ? 0 : status->tolerance * status->tolerance;
+  mjtNum epsilon = discreteGeoms(obj1, obj2) ? 0 : 0.5 * status->tolerance * status->tolerance;
+  mjtNum x_norm;
 
   // set initial guess
   sub3(x_k, x1_k, x2_k);
 
   for (; k < kmax; k++) {
     // compute the kth support point
-    gjkSupport(simplex + n, obj1, obj2, x_k);
+    x_norm = dot3(x_k, x_k);
+    if (x_norm < mjMINVAL2) {
+      break;
+    }
+    x_norm = mju_sqrt(x_norm);
+    gjkSupport(simplex + n, obj1, obj2, x_k, x_norm);
     mjtNum *s_k = simplex[n].vert;
 
     // stopping criteria using the Frank-Wolfe duality gap given by
     //  |f(x_k) - f(x_min)|^2 <= < grad f(x_k), (x_k - s_k) >
     mjtNum diff[3];
     sub3(diff, x_k, s_k);
-    if (2*dot3(x_k, diff) < epsilon) {
+    if (dot3(x_k, diff) < epsilon) {
       if (!k) n = 1;
       break;
     }
@@ -238,12 +244,12 @@ static void gjk(mjCCDStatus* status, mjCCDObj* obj1, mjCCDObj* obj2) {
 
     // run the distance subalgorithm to compute the barycentric coordinates
     // of the closest point to the origin in the simplex
-    subdistance(lambda, n + 1, simplex[0].vert, simplex[1].vert, simplex[2].vert, simplex[3].vert);
+    subdistance(lambda, n + 1, simplex);
 
     // remove vertices from the simplex no longer needed
     n = 0;
     for (int i = 0; i < 4; i++) {
-      if (lambda[i] == 0) continue;
+      if (!lambda[i]) continue;
       simplex[n] = simplex[i];
       lambda[n++] = lambda[i];
     }
@@ -285,58 +291,51 @@ static void gjk(mjCCDStatus* status, mjCCDObj* obj1, mjCCDObj* obj2) {
   status->nx = 1;
   status->gjk_iterations = k;
   status->nsimplex = n;
-  status->dist = norm3(x_k);
+  status->dist = x_norm;
 }
 
 
 
 // compute the support point in obj1 and obj2 for Minkowski difference
-static inline void support(mjtNum s1[3], mjtNum s2[3], mjCCDObj* obj1, mjCCDObj* obj2,
+static inline void support(Vertex* v, mjCCDObj* obj1, mjCCDObj* obj2,
                            const mjtNum dir[3], const mjtNum dir_neg[3]) {
   // obj1
-  obj1->support(s1, obj1, dir);
+  obj1->support(v->vert1, obj1, dir);
   if (obj1->margin > 0 && obj1->geom >= 0) {
     mjtNum margin = 0.5 * obj1->margin;
-    s1[0] += dir[0] * margin;
-    s1[1] += dir[1] * margin;
-    s1[2] += dir[2] * margin;
+    v->vert1[0] += dir[0] * margin;
+    v->vert1[1] += dir[1] * margin;
+    v->vert1[2] += dir[2] * margin;
   }
 
   // obj2
-  obj2->support(s2, obj2, dir_neg);
+  obj2->support(v->vert2, obj2, dir_neg);
   if (obj2->margin > 0 && obj2->geom >= 0) {
     mjtNum margin = 0.5 * obj2->margin;
-    s2[0] += dir_neg[0] * margin;
-    s2[1] += dir_neg[1] * margin;
-    s2[2] += dir_neg[2] * margin;
+    v->vert2[0] += dir_neg[0] * margin;
+    v->vert2[1] += dir_neg[1] * margin;
+    v->vert2[2] += dir_neg[2] * margin;
   }
+
+  // compute S_{A-B}(dir) = S_A(dir) - S_B(-dir)
+  sub3(v->vert, v->vert1, v->vert2);
+
+  // copy vertex indices of discrete geoms
+  v->index1 = obj1->vertindex;
+  v->index2 = obj2->vertindex;
 }
 
 
 
 // compute the support points in obj1 and obj2 for the kth approximation point
-static void gjkSupport(Vertex* v, mjCCDObj* obj1, mjCCDObj* obj2,
-                       const mjtNum x_k[3]) {
-  mjtNum dir[3] = {-1, 0, 0}, dir_neg[3] = {1, 0, 0};
+static inline void gjkSupport(Vertex* v, mjCCDObj* obj1, mjCCDObj* obj2,
+                              const mjtNum x_k[3], mjtNum x_norm) {
+  mjtNum dir[3], dir_neg[3];
 
   // mjc_support requires a normalized direction
-  mjtNum norm = dot3(x_k, x_k);
-  if (norm > mjMINVAL2) {
-    norm = 1/mju_sqrt(norm);
-    scl3(dir_neg, x_k, norm);
-    scl3(dir, dir_neg, -1);
-  }
-
-  // compute S_{A-B}(dir) = S_A(dir) - S_B(-dir)
-  support(v->vert1, v->vert2, obj1, obj2, dir, dir_neg);
-  sub3(v->vert, v->vert1, v->vert2);
-  // copy mesh indices
-  if (obj1->vertindex >= 0) {
-    v->index1 = obj1->vertindex;
-  }
-  if (obj2->vertindex >= 0) {
-    v->index2 = obj2->vertindex;
-  }
+  scl3(dir_neg, x_k, 1 / x_norm);
+  scl3(dir, dir_neg, -1);
+  support(v, obj1, obj2, dir, dir_neg);
 }
 
 
@@ -356,16 +355,7 @@ static int epaSupport(Polytope* pt, mjCCDObj* obj1, mjCCDObj* obj2,
 
   int n = pt->nverts++;
   Vertex* v = pt->verts + n;
-
-  // compute S_{A-B}(dir) = S_A(dir) - S_B(-dir)
-  support(v->vert1, v->vert2, obj1, obj2, dir, dir_neg);
-  sub3(v->vert, v->vert1, v->vert2);
-  if (obj1->vertindex >= 0) {
-    v->index1 = obj1->vertindex;
-  }
-  if (obj2->vertindex >= 0) {
-    v->index2 = obj2->vertindex;
-  }
+  support(v, obj1, obj2, dir, dir_neg);
   return n;
 }
 
@@ -375,15 +365,7 @@ static int epaSupport(Polytope* pt, mjCCDObj* obj1, mjCCDObj* obj2,
 static void gjkIntersectSupport(Vertex* v, mjCCDObj* obj1, mjCCDObj* obj2,
                                 const mjtNum dir[3]) {
   mjtNum dir_neg[3] = {-dir[0], -dir[1], -dir[2]};
-  // compute S_{A-B}(dir) = S_A(dir) - S_B(-dir)
-  support(v->vert1, v->vert2, obj1, obj2, dir, dir_neg);
-  sub3(v->vert, v->vert1, v->vert2);
-  if (obj1->vertindex >= 0) {
-    v->index1 = obj1->vertindex;
-  }
-  if (obj2->vertindex >= 0) {
-    v->index2 = obj2->vertindex;
-  }
+  support(v, obj1, obj2, dir, dir_neg);
 }
 
 
@@ -557,24 +539,33 @@ static inline int sameSign2(mjtNum a, mjtNum b) {
 // subdistance algorithm for GJK that computes the barycentric coordinates of the point in a
 // simplex closest to the origin
 // implementation adapted from Montanari et al, ToG 2017
-static inline void subdistance(mjtNum lambda[4], int n, const mjtNum s1[3],
-                               const mjtNum s2[3], const mjtNum s3[3], const mjtNum s4[3]) {
-  lambda[0] = lambda[1] = lambda[2] = lambda[3] = 0;
-  if (n == 4) {
-    S3D(lambda, s1, s2, s3, s4);
-  } else if (n == 3) {
-    S2D(lambda, s1, s2, s3);
-  } else if (n == 2) {
-    S1D(lambda, s1, s2);
-  } else {
+static inline void subdistance(mjtNum lambda[4], int n, const Vertex simplex[4]) {
+  memset(lambda, 0, 4 * sizeof(mjtNum));
+  const mjtNum* s1 = simplex[0].vert;
+  const mjtNum* s2 = simplex[1].vert;
+  const mjtNum* s3 = simplex[2].vert;
+  const mjtNum* s4 = simplex[3].vert;
+
+  switch (n) {
+  case 4:
+     S3D(lambda, s1, s2, s3, s4);
+     break;
+  case 3:
+     S2D(lambda, s1, s2, s3);
+      break;
+  case 2:
+     S1D(lambda, s1, s2);
+     break;
+  default:
     lambda[0] = 1;
+    break;
   }
 }
 
 
 
-static void S3D(mjtNum lambda[4], const mjtNum s1[3], const mjtNum s2[3], const mjtNum s3[3],
-                const mjtNum s4[3]) {
+static void S3D(mjtNum lambda[4], const mjtNum s1[3], const mjtNum s2[3],
+                const mjtNum s3[3], const mjtNum s4[3]) {
   // the matrix M is given by
   //  [[ s1_x, s2_x, s3_x, s4_x ],
   //   [ s1_y, s2_y, s3_y, s4_y ],
@@ -659,7 +650,6 @@ static void S3D(mjtNum lambda[4], const mjtNum s1[3], const mjtNum s2[3], const 
       lambda[0] = lambda_2d[0];
       lambda[1] = lambda_2d[1];
       lambda[2] = lambda_2d[2];
-      lambda[3] = 0;
     }
   }
 }
@@ -806,27 +796,29 @@ static void S1D(mjtNum lambda[2], const mjtNum s1[3], const mjtNum s2[3]) {
   projectOriginLine(p_o, s1, s2);
 
   // find the axis with the largest projection "shadow" of the simplex
-  mjtNum mu_max = 0;
-  int index;
-  for (int i = 0; i < 3; i++) {
-    mjtNum mu = s1[i] - s2[i];
-    if (mju_abs(mu) >= mju_abs(mu_max)) {
-      mu_max = mu;
-      index = i;
-    }
+  mjtNum mu = s1[0] - s2[0];
+  mjtNum mu_max = mu;
+  int index = 0;
+
+  mu = s1[1] - s2[1];
+  if (mju_abs(mu) >= mju_abs(mu_max)) {
+    mu_max = mu;
+    index = 1;
+  }
+
+  mu = s1[2] - s2[2];
+  if (mju_abs(mu) >= mju_abs(mu_max)) {
+    mu_max = mu;
+    index = 2;
   }
 
   mjtNum C1 = p_o[index] - s2[index];
   mjtNum C2 = s1[index] - p_o[index];
 
-  // inside the simplex
-  if (sameSign2(mu_max, C1) && sameSign2(mu_max, C2)) {
-    lambda[0] = C1 / mu_max;
-    lambda[1] = C2 / mu_max;
-  } else {
-    lambda[0] = 0;
-    lambda[1] = 1;
-  }
+  // determine if projection of origin lies inside 1-simplex
+  int same = sameSign2(mu_max, C1) && sameSign2(mu_max, C2);
+  lambda[0] = same ? C1 / mu_max : 0;
+  lambda[1] = same ? C2 / mu_max : 1;
 }
 
 
@@ -1135,9 +1127,7 @@ static int polytope3(Polytope* pt, mjCCDStatus* status, mjCCDObj* obj1, mjCCDObj
     return mjEPA_P3_ORIGIN_ON_FACE;
   }
 
-
-  // if the origin is on the affine hull of any of the faces then the origin is not in the
-  //  hexahedron or the hexahedron is degenerate
+  // populate face map
   for (int i = 0; i < 6; i++) {
     pt->map[i] = pt->faces + i;
     pt->faces[i].index = i;
@@ -1177,6 +1167,7 @@ static int polytope4(Polytope* pt, mjCCDStatus* status, mjCCDObj* obj1, mjCCDObj
     return mjEPA_P4_MISSING_ORIGIN;
   }
 
+  // populate face map
   for (int i = 0; i < 4; i++) {
     pt->map[i] = pt->faces + i;
     pt->faces[i].index = i;
@@ -1186,16 +1177,10 @@ static int polytope4(Polytope* pt, mjCCDStatus* status, mjCCDObj* obj1, mjCCDObj
 }
 
 
-
 // make a copy of vertex in polytope and return its index
 static inline int insertVertex(Polytope* pt, const Vertex* v) {
   int n = pt->nverts++;
-  Vertex* new_v = pt->verts + n;
-  copy3(new_v->vert1, v->vert1);
-  copy3(new_v->vert2, v->vert2);
-  new_v->index1 = v->index1;
-  new_v->index2 = v->index2;
-  sub3(new_v->vert, v->vert1, v->vert2);
+  pt->verts[n] = *v;
   return n;
 }
 
@@ -1344,10 +1329,17 @@ static void epaWitness(const Polytope* pt, const Face* face, mjtNum x1[3], mjtNu
 // return a face of the expanded polytope that best approximates the pentration depth
 // witness points are in status->{x1, x2}
 static Face* epa(mjCCDStatus* status, Polytope* pt, mjCCDObj* obj1, mjCCDObj* obj2) {
-  mjtNum tolerance = status->tolerance, lower2, upper = mjMAX_LIMIT, upper2 = mjMAX_LIMIT;
-  int k, kmax = status->max_iterations;
+  mjtNum upper = mjMAX_LIMIT, upper2 = mjMAX_LIMIT, lower2;
   Face* face = NULL, *pface = NULL;  // face closest to origin
+  mjtNum tolerance = status->tolerance;
+  int discrete = discreteGeoms(obj1, obj2);
 
+  // tolerance is not used for discrete geoms
+  if (discrete && sizeof(mjtNum) == sizeof(double)) {
+    tolerance = mjMINVAL;
+  }
+
+  int k, kmax = status->max_iterations;
   for (k = 0; k < kmax; k++) {
     pface = face;
 
@@ -1375,8 +1367,8 @@ static Face* epa(mjCCDStatus* status, Polytope* pt, mjCCDObj* obj1, mjCCDObj* ob
     // compute support point w from the closest face's normal
     mjtNum lower = mju_sqrt(lower2);
     int wi = epaSupport(pt, obj1, obj2, face->v, lower);
-    mjtNum* w = pt->verts[wi].vert;
-    mjtNum upper_k = dot3(face->v, w) / lower;  // upper bound for kth iteration
+    const Vertex* w = pt->verts + wi;
+    mjtNum upper_k = dot3(face->v, w->vert) / lower;  // upper bound for kth iteration
     if (upper_k < upper) {
       upper = upper_k;
       upper2 = upper * upper;
@@ -1385,7 +1377,20 @@ static Face* epa(mjCCDStatus* status, Polytope* pt, mjCCDObj* obj1, mjCCDObj* ob
       break;
     }
 
-    pt->horizon.w = w;
+    // check if vertex w is a repeated support point
+    if (discrete) {
+      int i = 0, nverts = pt->nverts - 1;
+      for (; i < nverts; i++) {
+        if (w->index1 == pt->verts[i].index1 && w->index2 == pt->verts[i].index2) {
+          break;
+        }
+      }
+      if (i != nverts) {
+        break;
+      }
+    }
+
+    pt->horizon.w = w->vert;
     horizon(pt, face);
 
     // unrecoverable numerical issue; at least one face was deleted so nedges is 3 or more

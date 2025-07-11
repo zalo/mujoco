@@ -28,8 +28,6 @@
 #include <utility>
 #include <vector>
 
-#include "tinyxml2.h"
-
 #include <mujoco/mujoco.h>
 #include <mujoco/mjmodel.h>
 #include <mujoco/mjplugin.h>
@@ -45,6 +43,7 @@
 #include "user/user_util.h"
 #include "xml/xml_base.h"
 #include "xml/xml_util.h"
+#include "tinyxml2.h"
 
 namespace {
 using std::string;
@@ -127,8 +126,9 @@ const char* MJCF[nMJCF][mjXATTRNUM] = {
 
     {"visual", "*", "0"},
     {"<"},
-        {"global", "?", "12", "orthographic", "fovy", "ipd", "azimuth", "elevation", "linewidth",
-            "glow", "offwidth", "offheight", "realtime", "ellipsoidinertia", "bvactive"},
+        {"global", "?", "13", "cameraid", "orthographic", "fovy", "ipd", "azimuth", "elevation",
+            "linewidth", "glow", "offwidth", "offheight", "realtime", "ellipsoidinertia",
+            "bvactive"},
         {"quality", "?", "5", "shadowsize", "offsamples", "numslices", "numstacks",
             "numquads"},
         {"headlight", "?", "4", "ambient", "diffuse", "specular", "active"},
@@ -167,8 +167,9 @@ const char* MJCF[nMJCF][mjXATTRNUM] = {
         {"camera", "?", "17", "orthographic", "fovy", "ipd", "resolution", "pos", "quat",
             "axisangle", "xyaxes", "zaxis", "euler", "mode", "focal", "focalpixel",
             "principal", "principalpixel", "sensorsize", "user"},
-        {"light", "?", "13", "pos", "dir", "bulbradius", "directional", "castshadow", "active",
-            "attenuation", "cutoff", "exponent", "ambient", "diffuse", "specular", "mode"},
+        {"light", "?", "16", "pos", "dir", "bulbradius", "intensity", "range",
+            "directional", "type", "castshadow", "active", "attenuation", "cutoff", "exponent",
+            "ambient", "diffuse", "specular", "mode"},
         {"pair", "?", "7", "condim", "friction", "solref", "solreffriction", "solimp",
          "gap", "margin"},
         {"equality", "?", "3", "active", "solref", "solimp"},
@@ -240,8 +241,8 @@ const char* MJCF[nMJCF][mjXATTRNUM] = {
         {"<"},
             {"bone", "*", "5", "body", "bindpos", "bindquat", "vertid", "vertweight"},
         {">"},
-        {"texture", "*", "23", "name", "type", "content_type", "file", "gridsize", "gridlayout",
-            "fileright", "fileleft", "fileup", "filedown", "filefront", "fileback",
+        {"texture", "*", "24", "name", "type", "colorspace", "content_type", "file", "gridsize",
+            "gridlayout", "fileright", "fileleft", "fileup", "filedown", "filefront", "fileback",
             "builtin", "rgb1", "rgb2", "mark", "markrgb", "random", "width", "height",
             "hflip", "vflip", "nchannel"},
         {"material", "*", "12", "name", "class", "texture",  "texrepeat", "texuniform",
@@ -280,9 +281,9 @@ const char* MJCF[nMJCF][mjXATTRNUM] = {
         {"camera", "*", "20", "name", "class", "orthographic", "fovy", "ipd", "resolution", "pos",
             "quat", "axisangle", "xyaxes", "zaxis", "euler", "mode", "target",
             "focal", "focalpixel", "principal", "principalpixel", "sensorsize", "user"},
-        {"light", "*", "16", "name", "class", "directional", "castshadow", "active",
-            "pos", "dir", "bulbradius", "attenuation", "cutoff", "exponent", "ambient", "diffuse",
-            "specular", "mode", "target"},
+        {"light", "*", "20", "name", "class", "directional", "type", "castshadow", "active",
+            "pos", "dir", "bulbradius", "intensity", "range", "attenuation", "cutoff",
+            "exponent", "ambient", "diffuse", "specular", "mode", "target", "texture"},
         {"plugin", "*", "2", "plugin", "instance"},
         {"<"},
           {"config", "*", "2", "key", "value"},
@@ -310,10 +311,10 @@ const char* MJCF[nMJCF][mjXATTRNUM] = {
             "flatskin", "pos", "quat", "axisangle", "xyaxes", "zaxis", "euler", "origin"},
         {"<"},
             {"edge", "?", "5", "equality", "solref", "solimp", "stiffness", "damping"},
-            {"elasticity", "?", "4", "young", "poisson", "damping", "thickness"},
-            {"contact", "?", "13", "contype", "conaffinity", "condim", "priority",
+            {"elasticity", "?", "5", "young", "poisson", "damping", "thickness", "elastic2d"},
+            {"contact", "?", "14", "contype", "conaffinity", "condim", "priority",
                 "friction", "solmix", "solref", "solimp", "margin", "gap",
-                "internal", "selfcollide", "activelayers"},
+                "internal", "selfcollide", "activelayers", "vertcollide"},
             {"pin", "*", "4", "id", "range", "grid", "gridrange"},
             {"plugin", "*", "2", "plugin", "instance"},
             {"<"},
@@ -327,11 +328,11 @@ const char* MJCF[nMJCF][mjXATTRNUM] = {
         {"flex", "*", "13", "name", "group", "dim", "radius", "material",
             "rgba", "flatskin", "body", "vertex", "element", "texcoord", "elemtexcoord", "node"},
         {"<"},
-            {"contact", "?", "13", "contype", "conaffinity", "condim", "priority",
+            {"contact", "?", "14", "contype", "conaffinity", "condim", "priority",
                 "friction", "solmix", "solref", "solimp", "margin", "gap",
-                "internal", "selfcollide", "activelayers"},
+                "internal", "selfcollide", "activelayers", "vertcollide"},
             {"edge", "?", "2", "stiffness", "damping"},
-            {"elasticity", "?", "4", "young", "poisson", "damping", "thickness"},
+            {"elasticity", "?", "5", "young", "poisson", "damping", "thickness", "elastic2d"},
         {">"},
         {"skin", "*", "9", "name", "file", "material", "rgba", "inflate",
             "vertex", "texcoord", "face", "group"},
@@ -476,6 +477,7 @@ const char* MJCF[nMJCF][mjXATTRNUM] = {
         {"subtreecom", "*", "5", "name", "body", "cutoff", "noise", "user"},
         {"subtreelinvel", "*", "5", "name", "body", "cutoff", "noise", "user"},
         {"subtreeangmom", "*", "5", "name", "body", "cutoff", "noise", "user"},
+        {"insidesite", "*", "7", "name", "site", "objtype", "objname", "cutoff", "noise", "user"},
         {"distance", "*", "8", "name", "geom1", "geom2", "body1", "body2", "cutoff", "noise", "user"},
         {"normal", "*", "8", "name", "geom1", "geom2", "body1", "body2", "cutoff", "noise", "user"},
         {"fromto", "*", "8", "name", "geom1", "geom2", "body1", "body2", "cutoff", "noise", "user"},
@@ -579,6 +581,17 @@ const mjMap camlight_map[camlight_sz] = {
   {"targetbodycom", mjCAMLIGHT_TARGETBODYCOM}
 };
 
+
+// light type
+const int lighttype_sz = 4;
+const mjMap lighttype_map[lighttype_sz] = {
+  {"spot",          mjLIGHT_SPOT},
+  {"directional",   mjLIGHT_DIRECTIONAL},
+  {"point",         mjLIGHT_POINT},
+  {"image",         mjLIGHT_IMAGE}
+};
+
+
 // texmat role type
 const int texrole_sz = mjNTEXROLE - 1;
 const mjMap texrole_map[texrole_sz] = {
@@ -646,6 +659,15 @@ const mjMap texture_map[texture_sz] = {
   {"2d",          mjTEXTURE_2D},
   {"cube",        mjTEXTURE_CUBE},
   {"skybox",      mjTEXTURE_SKYBOX}
+};
+
+
+// colorspace for texture
+const int colorspace_sz = 3;
+const mjMap colorspace_map[colorspace_sz] = {
+  {"auto",        mjCOLORSPACE_AUTO},
+  {"linear",      mjCOLORSPACE_LINEAR},
+  {"sRGB",        mjCOLORSPACE_SRGB}
 };
 
 
@@ -806,6 +828,15 @@ const mjMap flexself_map[5] = {
 };
 
 
+// flex elastic 2d type
+const mjMap elastic2d_map[5] = {
+  {"none",        0},
+  {"bend",        1},
+  {"stretch",     2},
+  {"both",        3},
+};
+
+
 
 //---------------------------------- class mjXReader implementation --------------------------------
 
@@ -955,25 +986,25 @@ void mjXReader::Parse(XMLElement* root, const mjVFS* vfs) {
 
 
 // compiler section parser
-void mjXReader::Compiler(XMLElement* section, mjSpec* spec) {
+void mjXReader::Compiler(XMLElement* section, mjSpec* s) {
   string text;
   int n;
 
   // top-level attributes
   if (MapValue(section, "autolimits", &n, bool_map, 2)) {
-    spec->compiler.autolimits = (n == 1);
+    s->compiler.autolimits = (n == 1);
   }
-  ReadAttr(section, "boundmass", 1, &spec->compiler.boundmass, text);
-  ReadAttr(section, "boundinertia", 1, &spec->compiler.boundinertia, text);
-  ReadAttr(section, "settotalmass", 1, &spec->compiler.settotalmass, text);
+  ReadAttr(section, "boundmass", 1, &s->compiler.boundmass, text);
+  ReadAttr(section, "boundinertia", 1, &s->compiler.boundinertia, text);
+  ReadAttr(section, "settotalmass", 1, &s->compiler.settotalmass, text);
   if (MapValue(section, "balanceinertia", &n, bool_map, 2)) {
-    spec->compiler.balanceinertia = (n == 1);
+    s->compiler.balanceinertia = (n == 1);
   }
   if (MapValue(section, "strippath", &n, bool_map, 2)) {
-    spec->strippath = (n == 1);
+    s->strippath = (n == 1);
   }
   if (MapValue(section, "fitaabb", &n, bool_map, 2)) {
-    spec->compiler.fitaabb = (n == 1);
+    s->compiler.fitaabb = (n == 1);
   }
   if (MapValue(section, "coordinate", &n, coordinate_map, 2)) {
     if (n == 1) {
@@ -982,48 +1013,48 @@ void mjXReader::Compiler(XMLElement* section, mjSpec* spec) {
     }
   }
   if (MapValue(section, "angle", &n, angle_map, 2)) {
-    spec->compiler.degree = (n == 1);
+    s->compiler.degree = (n == 1);
   }
   if (ReadAttrTxt(section, "eulerseq", text)) {
     if (text.size() != 3) {
       throw mjXError(section, "euler format must have length 3");
     }
-    memcpy(spec->compiler.eulerseq, text.c_str(), 3);
+    memcpy(s->compiler.eulerseq, text.c_str(), 3);
   }
   if (ReadAttrTxt(section, "assetdir", text)) {
-    mjs_setString(spec->meshdir, text.c_str());
-    mjs_setString(spec->texturedir, text.c_str());
+    mjs_setString(s->meshdir, text.c_str());
+    mjs_setString(s->texturedir, text.c_str());
   }
   // meshdir and texturedir take precedence over assetdir
   string meshdir, texturedir;
   if (ReadAttrTxt(section, "meshdir", meshdir)) {
-    mjs_setString(spec->meshdir, meshdir.c_str());
+    mjs_setString(s->meshdir, meshdir.c_str());
   };
   if (ReadAttrTxt(section, "texturedir", texturedir)) {
-    mjs_setString(spec->texturedir, texturedir.c_str());
+    mjs_setString(s->texturedir, texturedir.c_str());
   }
   if (MapValue(section, "discardvisual", &n, bool_map, 2)) {
-    spec->compiler.discardvisual = (n == 1);
+    s->compiler.discardvisual = (n == 1);
   }
   if (MapValue(section, "usethread", &n, bool_map, 2)) {
-    spec->compiler.usethread = (n == 1);
+    s->compiler.usethread = (n == 1);
   }
   if (MapValue(section, "fusestatic", &n, bool_map, 2)) {
-    spec->compiler.fusestatic = (n == 1);
+    s->compiler.fusestatic = (n == 1);
   }
-  MapValue(section, "inertiafromgeom", &spec->compiler.inertiafromgeom, TFAuto_map, 3);
-  ReadAttr(section, "inertiagrouprange", 2, spec->compiler.inertiagrouprange, text);
+  MapValue(section, "inertiafromgeom", &s->compiler.inertiafromgeom, TFAuto_map, 3);
+  ReadAttr(section, "inertiagrouprange", 2, s->compiler.inertiagrouprange, text);
   if (MapValue(section, "alignfree", &n, bool_map, 2)) {
-    spec->compiler.alignfree = (n == 1);
+    s->compiler.alignfree = (n == 1);
   }
   if (MapValue(section, "saveinertial", &n, bool_map, 2)) {
-    spec->compiler.saveinertial = (n == 1);
+    s->compiler.saveinertial = (n == 1);
   }
 
   // lengthrange subelement
   XMLElement* elem = FindSubElem(section, "lengthrange");
   if (elem) {
-    mjLROpt* opt = &(spec->compiler.LRopt);
+    mjLROpt* opt = &(s->compiler.LRopt);
 
     // flags
     MapValue(elem, "mode", &opt->mode, lrmode_map, lrmode_sz);
@@ -1143,7 +1174,7 @@ void mjXReader::Option(XMLElement* section, mjOption* opt) {
 
 
 // size section parser
-void mjXReader::Size(XMLElement* section, mjSpec* spec) {
+void mjXReader::Size(XMLElement* section, mjSpec* s) {
   // read memory bytes
   {
     constexpr char err_msg[] =
@@ -1232,69 +1263,69 @@ void mjXReader::Size(XMLElement* section, mjSpec* spec) {
       if (*memory / sizeof(mjtNum) > std::numeric_limits<std::size_t>::max()) {
         throw mjXError(section, "%s", err_msg);
       }
-      spec->memory = *memory;
+      s->memory = *memory;
     }
   }
 
   // read sizes
-  ReadAttrInt(section, "nuserdata", &spec->nuserdata);
-  ReadAttrInt(section, "nkey", &spec->nkey);
+  ReadAttrInt(section, "nuserdata", &s->nuserdata);
+  ReadAttrInt(section, "nkey", &s->nkey);
 
-  ReadAttrInt(section, "nconmax", &spec->nconmax);
-  if (spec->nconmax < -1) throw mjXError(section, "nconmax must be >= -1");
+  ReadAttrInt(section, "nconmax", &s->nconmax);
+  if (s->nconmax < -1) throw mjXError(section, "nconmax must be >= -1");
 
   {
     int nstack = -1;
     const bool has_nstack = ReadAttrInt(section, "nstack", &nstack);
     if (has_nstack) {
-      if (spec->nstack < -1) {
+      if (s->nstack < -1) {
         throw mjXError(section, "nstack must be >= -1");
       }
-      if (spec->memory != -1 && nstack != -1) {
+      if (s->memory != -1 && nstack != -1) {
         throw mjXError(section,
                        "either 'memory' and 'nstack' attribute can be specified, not both");
       }
-      spec->nstack = nstack;
+      s->nstack = nstack;
     }
   }
   {
     int njmax = -1;
     const bool has_njmax = ReadAttrInt(section, "njmax", &njmax);
     if (has_njmax) {
-      if (spec->njmax < -1) {
+      if (s->njmax < -1) {
         throw mjXError(section, "njmax must be >= -1");
       }
-      if (spec->memory != -1 && njmax != -1) {
+      if (s->memory != -1 && njmax != -1) {
         throw mjXError(section,
                        "either 'memory' and 'njmax' attribute can be specified, not both");
       }
-      spec->njmax = njmax;
+      s->njmax = njmax;
     }
   }
 
-  ReadAttrInt(section, "nuser_body", &spec->nuser_body);
-  if (spec->nuser_body < -1) throw mjXError(section, "nuser_body must be >= -1");
+  ReadAttrInt(section, "nuser_body", &s->nuser_body);
+  if (s->nuser_body < -1) throw mjXError(section, "nuser_body must be >= -1");
 
-  ReadAttrInt(section, "nuser_jnt", &spec->nuser_jnt);
-  if (spec->nuser_jnt < -1) throw mjXError(section, "nuser_jnt must be >= -1");
+  ReadAttrInt(section, "nuser_jnt", &s->nuser_jnt);
+  if (s->nuser_jnt < -1) throw mjXError(section, "nuser_jnt must be >= -1");
 
-  ReadAttrInt(section, "nuser_geom", &spec->nuser_geom);
-  if (spec->nuser_geom < -1) throw mjXError(section, "nuser_geom must be >= -1");
+  ReadAttrInt(section, "nuser_geom", &s->nuser_geom);
+  if (s->nuser_geom < -1) throw mjXError(section, "nuser_geom must be >= -1");
 
-  ReadAttrInt(section, "nuser_site", &spec->nuser_site);
-  if (spec->nuser_site < -1) throw mjXError(section, "nuser_site must be >= -1");
+  ReadAttrInt(section, "nuser_site", &s->nuser_site);
+  if (s->nuser_site < -1) throw mjXError(section, "nuser_site must be >= -1");
 
-  ReadAttrInt(section, "nuser_cam", &spec->nuser_cam);
-  if (spec->nuser_cam < -1) throw mjXError(section, "nuser_cam must be >= -1");
+  ReadAttrInt(section, "nuser_cam", &s->nuser_cam);
+  if (s->nuser_cam < -1) throw mjXError(section, "nuser_cam must be >= -1");
 
-  ReadAttrInt(section, "nuser_tendon", &spec->nuser_tendon);
-  if (spec->nuser_tendon < -1) throw mjXError(section, "nuser_tendon must be >= -1");
+  ReadAttrInt(section, "nuser_tendon", &s->nuser_tendon);
+  if (s->nuser_tendon < -1) throw mjXError(section, "nuser_tendon must be >= -1");
 
-  ReadAttrInt(section, "nuser_actuator", &spec->nuser_actuator);
-  if (spec->nuser_actuator < -1) throw mjXError(section, "nuser_actuator must be >= -1");
+  ReadAttrInt(section, "nuser_actuator", &s->nuser_actuator);
+  if (s->nuser_actuator < -1) throw mjXError(section, "nuser_actuator must be >= -1");
 
-  ReadAttrInt(section, "nuser_sensor", &spec->nuser_sensor);
-  if (spec->nuser_sensor < -1) throw mjXError(section, "nuser_sensor must be >= -1");
+  ReadAttrInt(section, "nuser_sensor", &s->nuser_sensor);
+  if (s->nuser_sensor < -1) throw mjXError(section, "nuser_sensor must be >= -1");
 }
 
 
@@ -1325,7 +1356,7 @@ void mjXReader::OneFlex(XMLElement* elem, mjsFlex* flex) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(flex->name, name.c_str());
+    mjs_setName(flex->element, name.c_str());
   }
   if (ReadAttrTxt(elem, "material", material)) {
     mjs_setString(flex->material, material.c_str());
@@ -1380,6 +1411,9 @@ void mjXReader::OneFlex(XMLElement* elem, mjsFlex* flex) {
       flex->internal = (n == 1);
     }
     MapValue(cont, "selfcollide", &flex->selfcollide, flexself_map, 5);
+    if (MapValue(cont, "vertcollide", &flex->vertcollide, bool_map, 2)) {
+      flex->vertcollide = (n == 1);
+    }
     ReadAttrInt(cont, "activelayers", &flex->activelayers);
   }
 
@@ -1397,6 +1431,7 @@ void mjXReader::OneFlex(XMLElement* elem, mjsFlex* flex) {
     ReadAttr(elasticity, "poisson", 1, &flex->poisson, text);
     ReadAttr(elasticity, "thickness", 1, &flex->thickness, text);
     ReadAttr(elasticity, "damping", 1, &flex->damping, text);
+    MapValue(elasticity, "elastic2d", &flex->elastic2d, elastic2d_map, 4);
   }
 
   // write error info
@@ -1412,7 +1447,7 @@ void mjXReader::OneMesh(XMLElement* elem, mjsMesh* mesh, const mjVFS* vfs) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    *mesh->name = name;
+    mjs_setName(mesh->element, name.c_str());
   }
   if (ReadAttrTxt(elem, "content_type", content_type)) {
     *mesh->content_type = content_type;
@@ -1487,7 +1522,7 @@ void mjXReader::OneSkin(XMLElement* elem, mjsSkin* skin, const mjVFS* vfs) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(skin->name, name.c_str());
+    mjs_setName(skin->element, name.c_str());
   }
   auto file = ReadAttrFile(elem, "file", vfs, AssetDir());
   if (file.has_value()) {
@@ -1577,7 +1612,7 @@ void mjXReader::OneMaterial(XMLElement* elem, mjsMaterial* material) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(material->name, name.c_str());
+    mjs_setName(material->element, name.c_str());
   }
 
   bool tex_attributes_found = false;
@@ -1626,7 +1661,7 @@ void mjXReader::OneJoint(XMLElement* elem, mjsJoint* joint) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(joint->name, name.c_str());
+    mjs_setName(joint->element, name.c_str());
   }
   if (MapValue(elem, "type", &n, joint_map, joint_sz)) {
     joint->type = (mjtJoint)n;
@@ -1674,7 +1709,7 @@ void mjXReader::OneGeom(XMLElement* elem, mjsGeom* geom) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(geom->name, name.c_str());
+    mjs_setName(geom->element, name.c_str());
   }
   if (MapValue(elem, "type", &n, geom_map, mjNGEOMTYPES)) {
     geom->type = (mjtGeom)n;
@@ -1746,7 +1781,7 @@ void mjXReader::OneSite(XMLElement* elem, mjsSite* site) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(site->name, name.c_str());
+    mjs_setName(site->element, name.c_str());
   }
   if (MapValue(elem, "type", &n, geom_map, mjNGEOMTYPES)) {
     site->type = (mjtGeom)n;
@@ -1779,7 +1814,7 @@ void mjXReader::OneCamera(XMLElement* elem, mjsCamera* camera) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(camera->name, name.c_str());
+    mjs_setName(camera->element, name.c_str());
   }
   if (ReadAttrTxt(elem, "target", targetbody)) {
     mjs_setString(camera->targetbody, targetbody.c_str());
@@ -1829,11 +1864,15 @@ void mjXReader::OneCamera(XMLElement* elem, mjsCamera* camera) {
 // light element parser
 void mjXReader::OneLight(XMLElement* elem, mjsLight* light) {
   int n;
-  string text, name, targetbody;
+  bool has_directional = false;
+  string text, name, texture, targetbody;
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(light->name, name.c_str());
+    mjs_setName(light->element, name.c_str());
+  }
+  if (ReadAttrTxt(elem, "texture", texture)) {
+    mjs_setString(light->texture, texture.c_str());
   }
   if (ReadAttrTxt(elem, "target", targetbody)) {
     mjs_setString(light->targetbody, targetbody.c_str());
@@ -1842,7 +1881,14 @@ void mjXReader::OneLight(XMLElement* elem, mjsLight* light) {
     light->mode = (mjtCamLight)n;
   }
   if (MapValue(elem, "directional", &n, bool_map, 2)) {
-    light->directional = (n == 1);
+    light->type = (n == 1) ? mjLIGHT_DIRECTIONAL : mjLIGHT_SPOT;
+    has_directional = true;
+  }
+  if (MapValue(elem, "type", &n, lighttype_map, lighttype_sz)) {
+    if (has_directional) {
+      throw mjXError(elem, "type and directional cannot both be defined");
+    }
+    light->type = (mjtLightType)n;
   }
   if (MapValue(elem, "castshadow", &n, bool_map, 2)) {
     light->castshadow = (n == 1);
@@ -1853,6 +1899,8 @@ void mjXReader::OneLight(XMLElement* elem, mjsLight* light) {
   ReadAttr(elem, "pos", 3, light->pos, text);
   ReadAttr(elem, "dir", 3, light->dir, text);
   ReadAttr(elem, "bulbradius", 1, &light->bulbradius, text);
+  ReadAttr(elem, "intensity", 1, &light->intensity, text);
+  ReadAttr(elem, "range", 1, &light->range, text);
   ReadAttr(elem, "attenuation", 3, light->attenuation, text);
   ReadAttr(elem, "cutoff", 1, &light->cutoff, text);
   ReadAttr(elem, "exponent", 1, &light->exponent, text);
@@ -1882,7 +1930,7 @@ void mjXReader::OnePair(XMLElement* elem, mjsPair* pair) {
 
   // read other parameters
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(pair->name, name.c_str());
+    mjs_setName(pair->element, name.c_str());
   }
   ReadAttrInt(elem, "condim", &pair->condim);
   ReadAttr(elem, "solref", mjNREF, pair->solref, text, false, false);
@@ -1910,7 +1958,7 @@ void mjXReader::OneEquality(XMLElement* elem, mjsEquality* equality) {
   // regular only
   if (!readingdefaults) {
     if (ReadAttrTxt(elem, "name", name)) {
-      mjs_setString(equality->name, name.c_str());
+      mjs_setName(equality->element, name.c_str());
     }
 
     switch (equality->type) {
@@ -2046,7 +2094,7 @@ void mjXReader::OneTendon(XMLElement* elem, mjsTendon* tendon) {
 
   // read attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(tendon->name, name.c_str());
+    mjs_setName(tendon->element, name.c_str());
   }
   ReadAttrInt(elem, "group", &tendon->group);
   if (ReadAttrTxt(elem, "material", material)) {
@@ -2089,7 +2137,7 @@ void mjXReader::OneActuator(XMLElement* elem, mjsActuator* actuator) {
 
   // common attributes
   if (ReadAttrTxt(elem, "name", name)) {
-    mjs_setString(actuator->name, name.c_str());
+    mjs_setName(actuator->element, name.c_str());
   }
   ReadAttrInt(elem, "group", &actuator->group);
   MapValue(elem, "ctrllimited", &actuator->ctrllimited, TFAuto_map, 3);
@@ -2163,6 +2211,7 @@ void mjXReader::OneActuator(XMLElement* elem, mjsActuator* actuator) {
   type = elem->Value();
 
   // explicit attributes
+  string err;
   if (type == "general") {
     // explicit attributes
     int n;
@@ -2186,183 +2235,98 @@ void mjXReader::OneActuator(XMLElement* elem, mjsActuator* actuator) {
 
   // direct drive motor
   else if (type == "motor") {
-    // unit gain
-    actuator->gainprm[0] = 1;
-
-    // implied parameters
-    actuator->dyntype = mjDYN_NONE;
-    actuator->gaintype = mjGAIN_FIXED;
-    actuator->biastype = mjBIAS_NONE;
+    err = mjs_setToMotor(actuator);
   }
 
   // position or integrated velocity servo
   else if (type == "position" || type == "intvelocity") {
-    // explicit attributes
-    ReadAttr(elem, "kp", 1, actuator->gainprm, text);
-    actuator->biasprm[1] = -actuator->gainprm[0];
+    double kp = actuator->gainprm[0];
+    ReadAttr(elem, "kp", 1, &kp, text);
 
     // read kv
-    double kv = -1;  // -1: undefined
-    if (ReadAttr(elem, "kv", 1, &kv, text)) {
-      if (kv < 0) throw mjXError(elem, "kv cannot be negative");
+    double kv_data;
+    double *kv = &kv_data;
+    if (!ReadAttr(elem, "kv", 1, kv, text)) {
+      kv = nullptr;
     }
 
     // read dampratio
-    double dampratio = -1;  // -1: undefined
-    if (ReadAttr(elem, "dampratio", 1, &dampratio, text)) {
-      if (dampratio < 0) throw mjXError(elem, "dampratio cannot be negative");
+    double dampratio_data;
+    double *dampratio = &dampratio_data;
+    if (!ReadAttr(elem, "dampratio", 1, dampratio, text)) {
+      dampratio = nullptr;
     }
-
-    // set biasprm[2]; negative: regular damping, positive: dampratio
-    if (dampratio > 0 && kv > 0) {
-      throw mjXError(elem, "kv and dampratio cannot both be defined");
-    }
-    if (kv > 0) actuator->biasprm[2] = -kv;
-    if (dampratio > 0) actuator->biasprm[2] = dampratio;
 
     // read timeconst, set dyntype
-    if (ReadAttr(elem, "timeconst", 1, actuator->dynprm, text)) {
-      if (actuator->dynprm[0] < 0)
-        throw mjXError(elem, "timeconst cannot be negative");
-      actuator->dyntype = actuator->dynprm[0] ? mjDYN_FILTEREXACT : mjDYN_NONE;
+    double timeconst_data;
+    double *timeconst = &timeconst_data;
+    if (!ReadAttr(elem, "timeconst", 1, timeconst, text)) {
+      timeconst = nullptr;
     }
 
     // handle inheritrange
-    ReadAttr(elem, "inheritrange", 1, &actuator->inheritrange, text);
-    if (actuator->inheritrange > 0) {
-      if (type == "position") {
-        if (actuator->ctrlrange[0] || actuator->ctrlrange[1]) {
-          throw mjXError(elem, "ctrlrange and inheritrange cannot both be defined");
-        }
-      } else {
-        if (actuator->actrange[0] || actuator->actrange[1]) {
-          throw mjXError(elem, "actrange and inheritrange cannot both be defined");
-        }
-      }
-    }
+    double inheritrange = actuator->inheritrange;
+    ReadAttr(elem, "inheritrange", 1, &inheritrange, text);
 
-    // implied parameters
-    actuator->gaintype = mjGAIN_FIXED;
-    actuator->biastype = mjBIAS_AFFINE;
-
-    if (type == "intvelocity") {
-      actuator->dyntype = mjDYN_INTEGRATOR;
-      actuator->actlimited = 1;
+    if (type == "position") {
+      err = mjs_setToPosition(actuator, kp, kv, dampratio, timeconst, inheritrange);
+    } else {
+      err = mjs_setToIntVelocity(actuator, kp, kv, dampratio, timeconst, inheritrange);
     }
   }
 
   // velocity servo
   else if (type == "velocity") {
-    // clear bias
-    mjuu_zerovec(actuator->biasprm, mjNBIAS);
-
-    // explicit attributes
-    ReadAttr(elem, "kv", 1, actuator->gainprm, text);
-    actuator->biasprm[2] = -actuator->gainprm[0];
-
-    // implied parameters
-    actuator->dyntype = mjDYN_NONE;
-    actuator->gaintype = mjGAIN_FIXED;
-    actuator->biastype = mjBIAS_AFFINE;
+    double kv = actuator->gainprm[0];
+    ReadAttr(elem, "kv", 1, &kv, text);
+    err = mjs_setToVelocity(actuator, kv);
   }
 
   // damper
   else if (type == "damper") {
-    // clear gain
-    mjuu_zerovec(actuator->gainprm, mjNGAIN);
-
-    // explicit attributes
-    ReadAttr(elem, "kv", 1, actuator->gainprm+2, text);
-    if (actuator->gainprm[2] < 0)
-      throw mjXError(elem, "damping coefficient cannot be negative");
-    actuator->gainprm[2] = -actuator->gainprm[2];
-
-    // require nonnegative range
-    if (actuator->ctrlrange[0] < 0 || actuator->ctrlrange[1] < 0) {
-      throw mjXError(elem, "damper control range cannot be negative");
-    }
-
-    // implied parameters
-    actuator->ctrllimited = 1;
-    actuator->dyntype = mjDYN_NONE;
-    actuator->gaintype = mjGAIN_AFFINE;
-    actuator->biastype = mjBIAS_NONE;
+    double kv = 0;
+    ReadAttr(elem, "kv", 1, &kv, text);
+    err = mjs_setToDamper(actuator, kv);
   }
 
   // cylinder
   else if (type == "cylinder") {
-    // explicit attributes
-    ReadAttr(elem, "timeconst", 1, actuator->dynprm, text);
-    ReadAttr(elem, "bias", 3, actuator->biasprm, text);
-    ReadAttr(elem, "area", 1, actuator->gainprm, text);
-    double diameter;
-    if (ReadAttr(elem, "diameter", 1, &diameter, text)) {
-      actuator->gainprm[0] = mjPI / 4 * diameter*diameter;
-    }
-
-    // implied parameters
-    actuator->dyntype = mjDYN_FILTER;
-    actuator->gaintype = mjGAIN_FIXED;
-    actuator->biastype = mjBIAS_AFFINE;
+    double timeconst = actuator->dynprm[0];
+    double bias = actuator->biasprm[0];
+    double area = actuator->gainprm[0];
+    double diameter = -1;
+    ReadAttr(elem, "timeconst", 1, &timeconst, text);
+    ReadAttr(elem, "bias", 3, &bias, text);
+    ReadAttr(elem, "area", 1, &area, text);
+    ReadAttr(elem, "diameter", 1, &diameter, text);
+    err = mjs_setToCylinder(actuator, timeconst, bias, area, diameter);
   }
 
   // muscle
   else if (type == "muscle") {
-    // set muscle defaults if same as global defaults
-    if (actuator->dynprm[0] == 1)actuator->dynprm[0] = 0.01;   // tau act
-    if (actuator->dynprm[1] == 0)actuator->dynprm[1] = 0.04;   // tau deact
-    if (actuator->gainprm[0] == 1)actuator->gainprm[0] = 0.75; // range[0]
-    if (actuator->gainprm[1] == 0)actuator->gainprm[1] = 1.05; // range[1]
-    if (actuator->gainprm[2] == 0)actuator->gainprm[2] = -1;   // force
-    if (actuator->gainprm[3] == 0)actuator->gainprm[3] = 200;  // scale
-    if (actuator->gainprm[4] == 0)actuator->gainprm[4] = 0.5;  // lmin
-    if (actuator->gainprm[5] == 0)actuator->gainprm[5] = 1.6;  // lmax
-    if (actuator->gainprm[6] == 0)actuator->gainprm[6] = 1.5;  // vmax
-    if (actuator->gainprm[7] == 0)actuator->gainprm[7] = 1.3;  // fpmax
-    if (actuator->gainprm[8] == 0)actuator->gainprm[8] = 1.2;  // fvmax
-
-    // explicit attributes
-    ReadAttr(elem, "timeconst", 2, actuator->dynprm, text);
-    ReadAttr(elem, "tausmooth", 1, actuator->dynprm+2, text);
-    if (actuator->dynprm[2] < 0)
-      throw mjXError(elem, "muscle tausmooth cannot be negative");
-    ReadAttr(elem, "range", 2, actuator->gainprm, text);
-    ReadAttr(elem, "force", 1, actuator->gainprm+2, text);
-    ReadAttr(elem, "scale", 1, actuator->gainprm+3, text);
-    ReadAttr(elem, "lmin", 1, actuator->gainprm+4, text);
-    ReadAttr(elem, "lmax", 1, actuator->gainprm+5, text);
-    ReadAttr(elem, "vmax", 1, actuator->gainprm+6, text);
-    ReadAttr(elem, "fpmax", 1, actuator->gainprm+7, text);
-    ReadAttr(elem, "fvmax", 1, actuator->gainprm+8, text);
-
-    // biasprm = gainprm
-    for (int n=0; n < 9; n++) {
-      actuator->biasprm[n] = actuator->gainprm[n];
-    }
-
-    // implied parameters
-    actuator->dyntype = mjDYN_MUSCLE;
-    actuator->gaintype = mjGAIN_MUSCLE;
-    actuator->biastype = mjBIAS_MUSCLE;
+    double tausmooth = actuator->dynprm[2];
+    double force = -1, scale = -1, lmin = -1, lmax = -1, vmax = -1, fpmax = -1, fvmax = -1;
+    double range[2] = {-1, -1}, timeconst[2] = {-1, -1};
+    ReadAttr(elem, "timeconst", 2, timeconst, text);
+    ReadAttr(elem, "tausmooth", 1, &tausmooth, text);
+    ReadAttr(elem, "range", 2, range, text);
+    ReadAttr(elem, "force", 1, &force, text);
+    ReadAttr(elem, "scale", 1, &scale, text);
+    ReadAttr(elem, "lmin", 1, &lmin, text);
+    ReadAttr(elem, "lmax", 1, &lmax, text);
+    ReadAttr(elem, "vmax", 1, &vmax, text);
+    ReadAttr(elem, "fpmax", 1, &fpmax, text);
+    ReadAttr(elem, "fvmax", 1, &fvmax, text);
+    err = mjs_setToMuscle(actuator, timeconst, tausmooth, range, force, scale,
+                          lmin, lmax, vmax, fpmax, fvmax);
   }
 
   // adhesion
   else if (type == "adhesion") {
-    // explicit attributes
-    ReadAttr(elem, "gain", 1, actuator->gainprm, text);
-    if (actuator->gainprm[0] < 0)
-      throw mjXError(elem, "adhesion gain cannot be negative");
-
-    // require nonnegative range
+    double gain = actuator->gainprm[0];
+    ReadAttr(elem, "gain", 1, &gain, text);
     ReadAttr(elem, "ctrlrange", 2, actuator->ctrlrange, text);
-    if (actuator->ctrlrange[0] < 0 || actuator->ctrlrange[1] < 0) {
-      throw mjXError(elem, "adhesion control range cannot be negative");
-    }
-
-    // implied parameters
-    actuator->ctrllimited = 1;
-    actuator->gaintype = mjGAIN_FIXED;
-    actuator->biastype = mjBIAS_NONE;
+    err = mjs_setToAdhesion(actuator, gain);
   }
 
   else if (type == "plugin") {
@@ -2380,6 +2344,11 @@ void mjXReader::OneActuator(XMLElement* elem, mjsActuator* actuator) {
 
   else {          // SHOULD NOT OCCUR
     throw mjXError(elem, "unrecognized actuator type: %s", type.c_str());
+  }
+
+  // throw error if any of the above failed
+  if (!err.empty()) {
+    throw mjXError(elem, err.c_str());
   }
 
   // read userdata
@@ -2658,10 +2627,11 @@ void mjXReader::OneFlexcomp(XMLElement* elem, mjsBody* body, const mjVFS* vfs) {
     ReadAttr(elasticity, "poisson", 1, &dflex.poisson, text);
     ReadAttr(elasticity, "damping", 1, &dflex.damping, text);
     ReadAttr(elasticity, "thickness", 1, &dflex.thickness, text);
+    MapValue(elasticity, "elastic2d", &dflex.elastic2d, elastic2d_map, 4);
   }
 
   // check errors
-  if (elasticity && fcomp.equality) {
+  if (dflex.elastic2d >= 2 && fcomp.equality) {
     throw mjXError(elem, "elasticity and edge constraints cannot both be present");
   }
 
@@ -2682,6 +2652,9 @@ void mjXReader::OneFlexcomp(XMLElement* elem, mjsBody* body, const mjVFS* vfs) {
       dflex.internal = (n == 1);
     }
     MapValue(cont, "selfcollide", &dflex.selfcollide, flexself_map, 5);
+    if (MapValue(cont, "vertcollide", &n, bool_map, 2)) {
+      dflex.vertcollide = (n == 1);
+    }
     ReadAttrInt(cont, "activelayers", &dflex.activelayers);
   }
 
@@ -2912,7 +2885,7 @@ void mjXReader::Custom(XMLElement* section) {
 
       // read attributes
       ReadAttrTxt(elem, "name", elname, true);
-      mjs_setString(numeric->name, elname.c_str());
+      mjs_setName(numeric->element, elname.c_str());
       if (ReadAttrInt(elem, "size", &numeric->size)) {
         int sz = numeric->size < 500 ? numeric->size : 500;
         for (int i=0; i < sz; i++) {
@@ -2943,7 +2916,7 @@ void mjXReader::Custom(XMLElement* section) {
 
       // read attributes
       ReadAttrTxt(elem, "name", elname, true);
-      mjs_setString(text->name, elname.c_str());
+      mjs_setName(text->element, elname.c_str());
       ReadAttrTxt(elem, "data", str, true);
       if (str.empty()) {
         throw mjXError(elem, "text field cannot be empty");
@@ -2963,7 +2936,7 @@ void mjXReader::Custom(XMLElement* section) {
 
       // read attributes
       ReadAttrTxt(elem, "name", elname, true);
-      mjs_setString(tuple->name, elname.c_str());
+      mjs_setName(tuple->element, elname.c_str());
 
       // read objects and add
       XMLElement* obj = FirstChildElement(elem);
@@ -3026,6 +2999,7 @@ void mjXReader::Visual(XMLElement* section) {
 
     // global sub-element
     if (name == "global") {
+      ReadAttrInt(elem, "cameraid",     &vis->global.cameraid);
       if (MapValue(elem, "orthographic", &n, bool_map, 2)) {
         vis->global.orthographic = (n == 1);
       }
@@ -3174,8 +3148,11 @@ void mjXReader::Asset(XMLElement* section, const mjVFS* vfs) {
       if (MapValue(elem, "type", &n, texture_map, texture_sz)) {
         texture->type = (mjtTexture)n;
       }
+      if (MapValue(elem, "colorspace", &n, colorspace_map, colorspace_sz)) {
+        texture->colorspace = (mjtColorSpace)n;
+      }
       if (ReadAttrTxt(elem, "name", texname)) {
-        mjs_setString(texture->name, texname.c_str());
+        mjs_setName(texture->element, texname.c_str());
       }
       if (ReadAttrTxt(elem, "content_type", content_type)) {
         mjs_setString(texture->content_type, content_type.c_str());
@@ -3267,7 +3244,7 @@ void mjXReader::Asset(XMLElement* section, const mjVFS* vfs) {
       // read attributes
       string name, content_type;
       if (ReadAttrTxt(elem, "name", name)) {
-        mjs_setString(hfield->name, name.c_str());
+        mjs_setName(hfield->element, name.c_str());
       }
       if (ReadAttrTxt(elem, "content_type", content_type)) {
         mjs_setString(hfield->content_type, content_type.c_str());
@@ -3430,7 +3407,7 @@ void mjXReader::Body(XMLElement* section, mjsBody* body, mjsFrame* frame,
       // read attributes
       string name;
       if (ReadAttrTxt(elem, "name", name)) {
-        mjs_setString(joint->name, name.c_str());
+        mjs_setName(joint->element, name.c_str());
       }
       ReadAttrInt(elem, "group", &joint->group);
       MapValue(elem, "align", &joint->align, TFAuto_map, 3);
@@ -3502,7 +3479,7 @@ void mjXReader::Body(XMLElement* section, mjsBody* body, mjsFrame* frame,
       // read attributes
       string name, childclass;
       if (ReadAttrTxt(elem, "name", name)) {
-        mjs_setString(pframe->name, name.c_str());
+        mjs_setName(pframe->element, name.c_str());
       }
       if (ReadAttrTxt(elem, "childclass", childclass)) {
         mjs_setString(pframe->childclass, childclass.c_str());
@@ -3579,7 +3556,7 @@ void mjXReader::Body(XMLElement* section, mjsBody* body, mjsFrame* frame,
       }
 
       // delete subtree
-      if (mjs_detachBody(spec, subtree)) {
+      if (mjs_delete(spec, subtree->element)) {
         throw mjXError(elem, mjs_getError(spec));
       }
     }
@@ -3603,7 +3580,7 @@ void mjXReader::Body(XMLElement* section, mjsBody* body, mjsFrame* frame,
       // read attributes
       string name, childclass;
       if (ReadAttrTxt(elem, "name", name)) {
-        mjs_setString(child->name, name.c_str());
+        mjs_setName(child->element, name.c_str());
       }
       if (ReadAttrTxt(elem, "childclass", childclass)) {
         mjs_setString(child->childclass, childclass.c_str());
@@ -3712,7 +3689,7 @@ void mjXReader::Contact(XMLElement* section) {
 
       // read name and body names
       if (ReadAttrTxt(elem, "name", exname)) {
-        mjs_setString(exclude->name, exname.c_str());
+        mjs_setName(exclude->element, exname.c_str());
       }
       ReadAttrTxt(elem, "body1", exbody1, true);
       mjs_setString(exclude->bodyname1, exbody1.c_str());
@@ -3894,7 +3871,7 @@ void mjXReader::Sensor(XMLElement* section) {
 
     // read name, noise, userdata
     if (ReadAttrTxt(elem, "name", name)) {
-      mjs_setString(sensor->name, name.c_str());
+      mjs_setName(sensor->element, name.c_str());
     }
     ReadAttr(elem, "cutoff", 1, &sensor->cutoff, text);
     ReadAttr(elem, "noise", 1, &sensor->noise, text);
@@ -4108,6 +4085,13 @@ void mjXReader::Sensor(XMLElement* section) {
       ReadAttrTxt(elem, "objtype", text, true);
       sensor->objtype = (mjtObj)mju_str2Type(text.c_str());
       ReadAttrTxt(elem, "objname", objname, true);
+    } else if (type == "insidesite") {
+      sensor->type = mjSENS_INSIDESITE;
+      sensor->reftype = mjOBJ_SITE;
+      ReadAttrTxt(elem, "site", refname, true);
+      ReadAttrTxt(elem, "objtype", text, true);
+      sensor->objtype = (mjtObj)mju_str2Type(text.c_str());
+      ReadAttrTxt(elem, "objname", objname, true);
     }
 
     // sensors related to kinematic subtrees; attached to a body (which is the subtree root)
@@ -4239,7 +4223,7 @@ void mjXReader::Keyframe(XMLElement* section) {
 
     // read name, time
     ReadAttrTxt(elem, "name", name);
-    mjs_setString(key->name, name.c_str());
+    mjs_setName(key->element, name.c_str());
     ReadAttr(elem, "time", 1, &key->time, text);
 
     // read qpos

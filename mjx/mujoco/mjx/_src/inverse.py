@@ -69,16 +69,16 @@ def inv_constraint(m: Model, d: Data) -> Data:
   """Inverse constraint solver."""
 
   # no constraints
-  if d.efc_J.size == 0:
+  if d._impl.efc_J.size == 0:  # pytype: disable=attribute-error
     return d.replace(qfrc_constraint=jp.zeros(m.nv))
 
   # update
   ctx = solver.Context.create(m, d, grad=False)
 
-  return d.replace(
-      qfrc_constraint=ctx.qfrc_constraint,
-      efc_force=ctx.efc_force,
-  )
+  return d.tree_replace({
+      'qfrc_constraint': ctx.qfrc_constraint,
+      '_impl.efc_force': ctx.efc_force,
+  })
 
 
 def inverse(m: Model, d: Data) -> Data:
@@ -93,11 +93,15 @@ def inverse(m: Model, d: Data) -> Data:
     d = discrete_acc(m, d)
 
   d = inv_constraint(m, d)
-  d = smooth.rne(m, d, flg_acc=True)
+  d = smooth.rne(m, d)
+  d = smooth.tendon_bias(m, d)
   d = sensor.sensor_acc(m, d)
 
   qfrc_inverse = (
-      d.qfrc_bias + m.dof_armature * d.qacc - d.qfrc_passive - d.qfrc_constraint
+      d.qfrc_bias
+      + support.mul_m(m, d, d.qacc)
+      - d.qfrc_passive
+      - d.qfrc_constraint
   )
 
   if m.opt.enableflags & EnableBit.INVDISCRETE:

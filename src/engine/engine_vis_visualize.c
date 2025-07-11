@@ -91,9 +91,9 @@ static void makeLabel(const mjModel* m, mjtObj type, int id, char* label) {
 
 // assign pseudo-random rgba to constraint island using Halton sequence
 static void islandColor(float rgba[4], int islanddofadr) {
-  rgba[0] = 0.1f + 0.8f*mju_Halton(islanddofadr + 1, 2);
-  rgba[1] = 0.1f + 0.8f*mju_Halton(islanddofadr + 1, 3);
-  rgba[2] = 0.1f + 0.8f*mju_Halton(islanddofadr + 1, 5);
+  rgba[0] = 0.1f + 0.9f*mju_Halton(islanddofadr + 1, 2);
+  rgba[1] = 0.1f + 0.9f*mju_Halton(islanddofadr + 1, 3);
+  rgba[2] = 0.1f + 0.9f*mju_Halton(islanddofadr + 1, 5);
   rgba[3] = 1;
 }
 
@@ -152,7 +152,7 @@ static void addContactGeom(const mjModel* m, mjData* d, const mjtByte* flags,
       // override standard colors if visualizing islands
       if (vopt->flags[mjVIS_ISLAND] && d->nisland && efc_adr >= 0) {
         // set color using island's first dof
-        islandColor(thisgeom->rgba, d->island_dofind[d->island_dofadr[d->efc_island[efc_adr]]]);
+        islandColor(thisgeom->rgba, d->island_dofadr[d->efc_island[efc_adr]]);
       }
 
       // otherwise regular colors (different for included and excluded contacts)
@@ -763,7 +763,7 @@ void mjv_addGeoms(const mjModel* m, mjData* d, const mjvOption* vopt,
   if (vopt->flags[mjVIS_MESHBVH]) {
     for (int geomid = 0; geomid < m->ngeom; geomid++) {
       int meshid = m->geom_dataid[geomid];
-      if (meshid == -1) {
+      if (m->geom_type[geomid] == mjGEOM_SDF || meshid == -1) {
         continue;
       }
 
@@ -800,6 +800,43 @@ void mjv_addGeoms(const mjModel* m, mjData* d, const mjvOption* vopt,
         mju_addTo3(pos, xpos);
 
         START
+        mjv_initGeom(thisgeom, mjGEOM_LINEBOX, size, pos, xmat, rgba);
+        FINISH
+      }
+    }
+  }
+
+  // mesh octree
+  category = mjCAT_DECOR;
+  objtype = mjOBJ_UNKNOWN;
+  if (vopt->flags[mjVIS_MESHBVH]) {
+    for (int geomid = 0; geomid < m->ngeom; geomid++) {
+      int meshid = m->geom_dataid[geomid];
+      if (m->geom_type[geomid] != mjGEOM_SDF || meshid == -1) {
+        continue;
+      }
+
+      for (int b = 0; b < m->mesh_octnum[meshid]; b++) {
+        int i = b + m->mesh_octadr[meshid];
+
+        START
+        if (m->oct_depth[i] != vopt->bvh_depth) {
+          continue;
+        }
+
+        // box color
+        const float* rgba = m->vis.rgba.bv;
+
+        // get xpos, xmat, size
+        const mjtNum* xpos = d->geom_xpos + 3 * geomid;
+        const mjtNum* xmat = d->geom_xmat + 9 * geomid;
+        const mjtNum *size = m->oct_aabb + 6*i + 3;
+
+        // offset xpos with aabb center (not always at geom origin)
+        const mjtNum *center = m->oct_aabb + 6*i;
+        mjtNum pos[3];
+        mju_mulMatVec3(pos, xmat, center);
+        mju_addTo3(pos, xpos);
         mjv_initGeom(thisgeom, mjGEOM_LINEBOX, size, pos, xmat, rgba);
         FINISH
       }
@@ -1344,7 +1381,7 @@ void mjv_addGeoms(const mjModel* m, mjData* d, const mjvOption* vopt,
           int island = d->dof_island[m->body_dofadr[weld_id]];
           if (island > -1) {
             // color using island's first dof
-            islandColor(rgba_island, d->island_dofind[d->island_dofadr[island]]);
+            islandColor(rgba_island, d->island_dofadr[island]);
           }
         }
       }
@@ -1835,7 +1872,7 @@ void mjv_addGeoms(const mjModel* m, mjData* d, const mjvOption* vopt,
                 if (d->tendon_efcadr[i] != -1) {
                   // set color using island's first dof
                   int island = d->efc_island[d->tendon_efcadr[i]];
-                  islandColor(rgba_island, d->island_dofind[d->island_dofadr[island]]);
+                  islandColor(rgba_island, d->island_dofadr[island]);
                 }
               }
               setMaterial(m, thisgeom, tendon_matid, rgba, vopt->flags);
@@ -2143,8 +2180,12 @@ void mjv_makeLights(const mjModel* m, const mjData* d, mjvScene* scn) {
     // set default properties
     memset(thislight, 0, sizeof(mjvLight));
     thislight->headlight = 1;
-    thislight->directional = 1;
+    thislight->texid = -1;
+    thislight->type = mjLIGHT_DIRECTIONAL;
     thislight->castshadow = 0;
+    thislight->bulbradius = 0.02;
+    thislight->intensity = 0;
+    thislight->range = 10;
 
     // compute head position and gaze direction in model space
     mjtNum hpos[3], hfwd[3];
@@ -2169,10 +2210,13 @@ void mjv_makeLights(const mjModel* m, const mjData* d, mjvScene* scn) {
 
       // copy properties
       memset(thislight, 0, sizeof(mjvLight));
-      thislight->directional = m->light_directional[i];
+      thislight->type = m->light_type[i];
+      thislight->texid = m->light_texid[i];
       thislight->castshadow = m->light_castshadow[i];
       thislight->bulbradius = m->light_bulbradius[i];
-      if (!thislight->directional) {
+      thislight->intensity = m->light_intensity[i];
+      thislight->range = m->light_range[i];
+      if (thislight->type == mjLIGHT_SPOT) {
         f2f(thislight->attenuation, m->light_attenuation+3*i, 3);
         thislight->exponent = m->light_exponent[i];
         thislight->cutoff = m->light_cutoff[i];

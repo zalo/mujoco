@@ -42,14 +42,14 @@ static const char* const kDuplicateVerticesPath =
     "user/testdata/duplicate_vertices.xml";
 static const char* const kCubePath =
     "user/testdata/cube.xml";
+static const char* const kCubeCompletePath =
+    "user/testdata/cube_complete.obj";
 static const char* const kTorusPath =
     "user/testdata/torus.xml";
 static const char* const kTorusMaxhullVertPath =
     "user/testdata/torus_maxhullvert.xml";
 static const char* const kTorusDefaultMaxhullVertPath =
     "user/testdata/torus_maxhullvert_default.xml";
-static const char* const kTorusShellPath =
-    "user/testdata/torus_shell.xml";
 static const char* const kCompareInertiaPath =
     "user/testdata/inertia_compare.xml";
 static const char* const kConvexInertiaPath =
@@ -529,7 +529,7 @@ TEST_F(MjCMeshTest, TinyInertiaFails) {
       <mesh name="tiny" vertex="0 0 0  1e-4 0 0  0 1e-4 0  0 0 1e-4"/>
     </asset>
     <worldbody>
-      <body>
+      <body name="tiny_body">
         <freejoint/>
         <geom type="mesh" mesh="tiny"/>
       </body>
@@ -542,6 +542,7 @@ TEST_F(MjCMeshTest, TinyInertiaFails) {
       error.data(),
       HasSubstr(
           "mass and inertia of moving bodies must be larger than mjMINVAL"));
+  EXPECT_THAT(error.data(), HasSubstr("Element name 'tiny_body'"));
 }
 
 TEST_F(MjCMeshTest, FlippedFaceAllowedLegacyInertia) {
@@ -1207,6 +1208,48 @@ TEST_F(MjCMeshTest, InvalidIndexInFace) {
   mj_deleteModel(model);
 }
 
+TEST_F(MjCMeshTest, QhullCache) {
+  static constexpr char xml1[] = R"(
+    <mujoco>
+      <asset>
+        <mesh name="box" file="cube_complete.obj"/>
+      </asset>
+      <worldbody>
+        <geom type="mesh" pos="0 0 2" mesh="box" contype="0" conaffinity="0"/>
+        <geom type="mesh" pos="0 0 0" mesh="box" contype="0" conaffinity="0"/>
+      </worldbody>
+    </mujoco>)";
+
+    static constexpr char xml2[] = R"(
+      <mujoco>
+        <asset>
+          <mesh name="box" file="cube_complete.obj"/>
+        </asset>
+        <worldbody>
+          <geom type="mesh" pos="0 0 2" mesh="box"/>
+          <geom type="mesh" pos="0 0 0" mesh="box"/>
+        </worldbody>
+      </mujoco>)";
+
+  mjVFS vfs;
+  mj_defaultVFS(&vfs);
+  mj_addFileVFS(&vfs, "", GetTestDataFilePath(kCubeCompletePath).c_str());
+
+  std::array<char, 1000> error;
+  mjModel* model = LoadModelFromString(xml1, error.data(), error.size(), &vfs);
+  ASSERT_THAT(model, NotNull()) << "Failed to load model: " << error.data();
+  EXPECT_THAT(model->mesh_graphadr[0], -1);
+
+  mj_deleteModel(model);
+
+  model = LoadModelFromString(xml2, error.data(), error.size(), &vfs);
+  ASSERT_THAT(model, NotNull()) << "Failed to load model: " << error.data();
+  EXPECT_GT(model->mesh_graphadr[0], -1);
+
+  mj_deleteModel(model);
+  mj_deleteVFS(&vfs);
+}
+
 TEST_F(MjCMeshTest, LoadSkin) {
   const std::string xml_path = GetTestDataFilePath(kCubeSkinPath);
   std::array<char, 1024> error;
@@ -1219,6 +1262,30 @@ TEST_F(MjCMeshTest, LoadSkin) {
   EXPECT_THAT(m2, NotNull());
   mj_deleteModel(m2);
   mj_deleteSpec(spec);
+}
+
+// ------------- test octree ---------------------------------------------------
+
+TEST_F(MjCMeshTest, Octree) {
+  const std::string xml_path = GetTestDataFilePath(kTorusPath);
+  std::array<char, 1024> error;
+  mjSpec* spec = mj_parseXML(xml_path.c_str(), 0, error.data(), error.size());
+  mjsGeom* geom = mjs_asGeom(mjs_firstElement(spec, mjOBJ_GEOM));
+  geom->type = mjGEOM_SDF;
+  mjModel* model = mj_compile(spec, 0);
+  ASSERT_THAT(model, NotNull()) << error.data();
+  EXPECT_GT(model->mesh_octnum[0], 0);
+  mj_deleteSpec(spec);
+  mj_deleteModel(model);
+}
+
+TEST_F(MjCMeshTest, OctreeNotComputedForNonSDF) {
+  const std::string xml_path = GetTestDataFilePath(kTorusPath);
+  std::array<char, 1024> error;
+  mjModel* model = mj_loadXML(xml_path.c_str(), 0, error.data(), error.size());
+  ASSERT_THAT(model, NotNull()) << error.data();
+  EXPECT_EQ(model->noct, 0);
+  mj_deleteModel(model);
 }
 
 

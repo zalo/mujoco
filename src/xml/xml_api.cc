@@ -34,6 +34,10 @@
 #include "xml/xml.h"
 #include "xml/xml_native_reader.h"
 #include "xml/xml_util.h"
+#if defined(mjUSEUSD)
+#include <mujoco/experimental/usd/usd.h>
+#include <pxr/usd/usd/stage.h>
+#endif
 
 //---------------------------------- Globals -------------------------------------------------------
 
@@ -126,7 +130,36 @@ mjModel* mj_loadXML(const char* filename, const mjVFS* vfs,
   return m;
 }
 
+#if defined(mjUSEUSD)
+//  parse USD file, compile it, and return low-level model.
+//  if vfs is not NULL, look up files in vfs before reading from disk
+//  error can be NULL; otherwise assumed to have size error_sz
+mjModel* mj_loadUSD(const char* filename, const mjVFS* vfs, char* error, int error_sz) {
+  auto stage = pxr::UsdStage::Open(filename);
 
+  if (stage == nullptr) {
+    mjCopyError(error, "Failed to load USD stage from file.", error_sz);
+    return nullptr;
+  }
+
+  // Parse USD into mjSpec.
+  std::unique_ptr<mjSpec, std::function<void(mjSpec*)> > spec(
+    mj_parseUSDStage(stage),
+    [](mjSpec* s) {
+      mj_deleteSpec(s);
+    });
+
+  // Compile new model.
+  mjModel* m = mj_compile(spec.get(), vfs);
+  if (!m) {
+    mjCopyError(error, mjs_getError(spec.get()), error_sz);
+    return nullptr;
+  }
+
+  GetGlobalModel().Set(spec.release());
+  return m;
+}
+#endif
 
 // update XML data structures with info from low-level model, save as MJCF
 //  returns 1 if successful, 0 otherwise
@@ -230,7 +263,8 @@ mjSpec* mj_parseXMLString(const char* xml, const mjVFS* vfs, char* error, int er
 
 // save spec to XML file, return 0 on success, -1 otherwise
 int mj_saveXML(const mjSpec* s, const char* filename, char* error, int error_sz) {
-  std::string result = WriteXML(NULL, s, error, error_sz);
+  // cast to mjSpec since WriteXML can in principle perform mj_copyBack (not here)
+  std::string result = WriteXML(NULL, (mjSpec*)s, error, error_sz);
   if (result.empty()) {
     return -1;
   }
@@ -247,7 +281,7 @@ int mj_saveXML(const mjSpec* s, const char* filename, char* error, int error_sz)
 // save spec to XML string, return 0 on success, -1 on failure
 // if length of the output buffer is too small, returns the required size
 int mj_saveXMLString(const mjSpec* s, char* xml, int xml_sz, char* error, int error_sz) {
-  std::string result = WriteXML(NULL, s, error, error_sz);
+  std::string result = WriteXML(NULL, (mjSpec*)s, error, error_sz);
   if (result.empty()) {
     return -1;
   } else if (result.size() >= xml_sz) {

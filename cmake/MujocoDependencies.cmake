@@ -15,11 +15,11 @@
 # Build configuration for third party libraries used in MuJoCo.
 
 set(MUJOCO_DEP_VERSION_lodepng
-    b4ed2cd7ecf61d29076169b49199371456d4f90b
+    17d08dd26cac4d63f43af217ebd70318bfb8189c
     CACHE STRING "Version of `lodepng` to be fetched."
 )
 set(MUJOCO_DEP_VERSION_tinyxml2
-    9a89766acc42ddfa9e7133c7d81a5bda108a0ade
+    e6caeae85799003f4ca74ff26ee16a789bc2af48
     CACHE STRING "Version of `tinyxml2` to be fetched."
 )
 set(MUJOCO_DEP_VERSION_tinyobjloader
@@ -35,21 +35,21 @@ set(MUJOCO_DEP_VERSION_ccd
     CACHE STRING "Version of `ccd` to be fetched."
 )
 set(MUJOCO_DEP_VERSION_qhull
-    0c8fc90d2037588024d9964515c1e684f6007ecc
+    c7bee59d068a69f427b1273e71cdc5bc455a5bdd
     CACHE STRING "Version of `qhull` to be fetched."
 )
 set(MUJOCO_DEP_VERSION_Eigen3
-    464c1d097891a1462ab28bf8bb763c1683883892
+    81044ec13df7608d0d9d86aff2ef9805fc69bed1
     CACHE STRING "Version of `Eigen3` to be fetched."
 )
 
 set(MUJOCO_DEP_VERSION_abseil
-    d9e4955c65cd4367dd6bf46f4ccb8cd3d100540b # LTS 20250127.1
+    76bb24329e8bf5f39704eb10d21b9a80befa7c81 # LTS 20250512.0
     CACHE STRING "Version of `abseil` to be fetched."
 )
 
 set(MUJOCO_DEP_VERSION_gtest
-    6910c9d9165801d8827d628cb72eb7ea9dd538c5 # v1.16.0
+    52eb8108c5bdec04579160ae17225d66034bd723 # v1.17.0
     CACHE STRING "Version of `gtest` to be fetched."
 )
 
@@ -58,9 +58,9 @@ set(MUJOCO_DEP_VERSION_benchmark
     CACHE STRING "Version of `benchmark` to be fetched."
 )
 
-set(MUJOCO_DEP_VERSION_sdflib
-    1927bee6bb8225258a39c8cbf14e18a4d50409ae
-    CACHE STRING "Version of `SdfLib` to be fetched."
+set(MUJOCO_DEP_VERSION_TriangleMeshDistance
+    2cb643de1436e1ba8e2be49b07ec5491ac604457
+    CACHE STRING "Version of `TriangleMeshDistance` to be fetched."
 )
 
 mark_as_advanced(MUJOCO_DEP_VERSION_lodepng)
@@ -73,7 +73,7 @@ mark_as_advanced(MUJOCO_DEP_VERSION_Eigen3)
 mark_as_advanced(MUJOCO_DEP_VERSION_abseil)
 mark_as_advanced(MUJOCO_DEP_VERSION_gtest)
 mark_as_advanced(MUJOCO_DEP_VERSION_benchmark)
-mark_as_advanced(MUJOCO_DEP_VERSION_sdflib)
+mark_as_advanced(MUJOCO_DEP_VERSION_TriangleMeshDistance)
 
 include(FetchContent)
 include(FindOrFetch)
@@ -191,26 +191,19 @@ findorfetch(
   EXCLUDE_FROM_ALL
 )
 
-option(SDFLIB_USE_ASSIMP OFF)
-option(SDFLIB_USE_OPENMP OFF)
-option(SDFLIB_USE_ENOKI OFF)
-findorfetch(
-  USE_SYSTEM_PACKAGE
-  OFF
-  PACKAGE_NAME
-  sdflib
-  LIBRARY_NAME
-  sdflib
-  GIT_REPO
-  https://github.com/UPC-ViRVIG/SdfLib.git
-  GIT_TAG
-  ${MUJOCO_DEP_VERSION_sdflib}
-  TARGETS
-  SdfLib
-  EXCLUDE_FROM_ALL
-)
-target_compile_options(SdfLib PRIVATE ${MUJOCO_MACOS_COMPILE_OPTIONS})
-target_link_options(SdfLib PRIVATE ${MUJOCO_MACOS_LINK_OPTIONS})
+if(NOT TARGET trianglemeshdistance)
+  FetchContent_Declare(
+    trianglemeshdistance
+    GIT_REPOSITORY https://github.com/InteractiveComputerGraphics/TriangleMeshDistance.git
+    GIT_TAG ${MUJOCO_DEP_VERSION_TriangleMeshDistance}
+  )
+
+  FetchContent_GetProperties(trianglemeshdistance)
+  if(NOT trianglemeshdistance_POPULATED)
+    FetchContent_Populate(trianglemeshdistance)
+    include_directories(${trianglemeshdistance_SOURCE_DIR})
+  endif()
+endif()
 
 set(ENABLE_DOUBLE_PRECISION ON)
 set(CCD_HIDE_ALL_SYMBOLS ON)

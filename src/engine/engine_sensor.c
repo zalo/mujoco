@@ -365,6 +365,15 @@ void mj_sensorPos(const mjModel* m, mjData* d) {
         mju_copy3(d->sensordata+adr, d->subtree_com+3*objid);
         break;
 
+      case mjSENS_INSIDESITE:                             // insidesite
+        get_xpos_xmat(d, objtype, objid, i, &xpos, &xmat);
+        d->sensordata[adr] = mju_insideGeom(d->site_xpos + 3*refid,
+                                            d->site_xmat + 9*refid,
+                                            m->site_size + 3*refid,
+                                            m->site_type[refid],
+                                            xpos);
+        break;
+
       case mjSENS_GEOMDIST:                               // signed distance between two geoms
       case mjSENS_GEOMNORMAL:                             // normal direction between two geoms
       case mjSENS_GEOMFROMTO:                             // segment between two geoms
@@ -938,9 +947,7 @@ void mj_energyPos(const mjModel* m, mjData* d) {
 
       switch ((mjtJoint) m->jnt_type[i]) {
       case mjJNT_FREE:
-        mju_copy4(quat, d->qpos+padr);
-        mju_normalize4(quat);
-        mju_sub3(dif, quat, m->qpos_spring+padr);
+        mju_sub3(dif, d->qpos+padr, m->qpos_spring+padr);
         d->energy[0] += 0.5*stiffness*mju_dot3(dif, dif);
 
         // continue with rotations
@@ -948,7 +955,7 @@ void mj_energyPos(const mjModel* m, mjData* d) {
         mjFALLTHROUGH;
 
       case mjJNT_BALL:
-        // covert quatertion difference into angular "velocity"
+        // convert quaternion difference into angular "velocity"
         mju_copy4(quat, d->qpos+padr);
         mju_normalize4(quat);
         mju_subQuat(dif, d->qpos + padr, m->qpos_spring + padr);

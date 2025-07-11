@@ -194,6 +194,7 @@ void mjXWriter::OneFlex(XMLElement* elem, const mjCFlex* flex) {
   WriteAttr(elastic, "poisson", 1, &flex->poisson, &defflex.poisson);
   WriteAttr(elastic, "thickness", 1, &flex->thickness, &defflex.thickness);
   WriteAttr(elastic, "damping", 1, &flex->damping, &defflex.damping);
+  WriteAttrKey(elastic, "elastic2d", elastic2d_map, 2, flex->elastic2d, defflex.elastic2d);
 
   // edge subelement
   XMLElement* edge = InsertEnd(elem, "edge");
@@ -394,10 +395,14 @@ void mjXWriter::OneJoint(XMLElement* elem, const mjCJoint* joint, mjCDef* def,
   WriteAttr(elem, "solimpfriction", mjNIMP, joint->solimp_friction, def->Joint().solimp_friction,
             true);
   WriteAttr(elem, "stiffness", 1, &joint->stiffness, &def->Joint().stiffness);
-  WriteAttrKey(elem, "limited", TFAuto_map, 3, joint->limited, def->Joint().limited);
+  if (joint->type != mjJNT_FREE) {
+    WriteAttrKey(elem, "limited", TFAuto_map, 3, joint->limited, def->Joint().limited);
+  }
   WriteAttr(elem, "range", 2, joint->range, def->Joint().range);
-  WriteAttrKey(elem, "actuatorfrclimited", TFAuto_map, 3, joint->actfrclimited,
-               def->Joint().actfrclimited);
+  if (joint->type != mjJNT_FREE && joint->type != mjJNT_BALL) {
+    WriteAttrKey(elem, "actuatorfrclimited", TFAuto_map, 3, joint->actfrclimited,
+                def->Joint().actfrclimited);
+  }
   WriteAttrKey(elem, "actuatorgravcomp", bool_map, 2, joint->actgravcomp, def->Joint().actgravcomp);
   WriteAttr(elem, "actuatorfrcrange", 2, joint->actfrcrange, def->Joint().actfrcrange);
   WriteAttr(elem, "margin", 1, &joint->margin, &def->Joint().margin);
@@ -604,7 +609,10 @@ void mjXWriter::OneLight(XMLElement* elem, const mjCLight* light, mjCDef* def,
 
   // defaults and regular
   WriteAttr(elem, "bulbradius", 1, &light->bulbradius, &def->Light().bulbradius);
-  WriteAttrKey(elem, "directional", bool_map, 2, light->directional, def->Light().directional);
+  WriteAttr(elem, "intensity", 1, &light->intensity, &def->Light().intensity);
+  WriteAttr(elem, "range", 1, &light->range, &def->Light().range);
+  WriteAttrKey(elem, "type", lighttype_map, lighttype_sz, light->type, def->Light().type);
+  WriteAttrTxt(elem, "texture", light->get_texture());
   WriteAttrKey(elem, "castshadow", bool_map, 2, light->castshadow, def->Light().castshadow);
   WriteAttrKey(elem, "active", bool_map, 2, light->active, def->Light().active);
   WriteAttr(elem, "attenuation", 3, light->attenuation, def->Light().attenuation);
@@ -881,12 +889,12 @@ mjXWriter::mjXWriter(void) {
 
 
 // cast model
-void mjXWriter::SetModel(const mjSpec* _spec, const mjModel* m) {
+void mjXWriter::SetModel(mjSpec* _spec, const mjModel* m) {
   if (_spec) {
     model = static_cast<mjCModel*>(_spec->element);
   }
   if (m) {
-    model->CopyBack(m);
+    mj_copyBack(&model->spec, m);
   }
 }
 
@@ -1126,6 +1134,7 @@ void mjXWriter::Visual(XMLElement* root) {
 
   // global
   elem = InsertEnd(section, "global");
+  WriteAttrInt(elem, "cameraid",       vis->global.cameraid,     visdef.global.cameraid);
   WriteAttrKey(elem, "orthographic",
                bool_map, 2, vis->global.orthographic, visdef.global.orthographic);
   WriteAttr(elem,    "fovy",      1,   &vis->global.fovy,        &visdef.global.fovy);
@@ -1485,6 +1494,7 @@ void mjXWriter::Asset(XMLElement* root) {
 
     // write common attributes
     WriteAttrKey(elem, "type", texture_map, texture_sz, texture->type);
+    WriteAttrKey(elem, "colorspace", colorspace_map, colorspace_sz, texture->colorspace);
     WriteAttrTxt(elem, "name", texture->name);
 
     // write builtin
@@ -1551,6 +1561,7 @@ void mjXWriter::Asset(XMLElement* root) {
     if (mesh->Plugin().active) {
       elem = InsertEnd(section, "mesh");
       WriteAttrTxt(elem, "name", mesh->name);
+      WriteAttrTxt(elem, "file", mesh->File());
       OnePlugin(InsertEnd(elem, "plugin"), &mesh->Plugin());
     } else{
       elem = InsertEnd(section, "mesh");
@@ -1589,7 +1600,8 @@ XMLElement* mjXWriter::OneFrame(XMLElement* elem, mjCFrame* frame) {
     return elem;
   }
 
-  if (frame->name.empty() && frame->classname.empty()) {
+  // TODO: empty classname should not occur (but does)
+  if (frame->name.empty() && (frame->classname.empty() || frame->classname == "main")) {
     return elem;
   }
 
@@ -2171,6 +2183,12 @@ void mjXWriter::Sensor(XMLElement* root) {
       case mjSENS_SUBTREEANGMOM:
         elem = InsertEnd(section, "subtreeangmom");
         WriteAttrTxt(elem, "body", sensor->get_objname());
+        break;
+      case mjSENS_INSIDESITE:
+        elem = InsertEnd(section, "insidesite");
+        WriteAttrTxt(elem, "objtype", mju_type2Str(sensor->objtype));
+        WriteAttrTxt(elem, "objname", sensor->get_objname());
+        WriteAttrTxt(elem, "site", sensor->get_refname());
         break;
       case mjSENS_GEOMDIST:
         elem = InsertEnd(section, "distance");

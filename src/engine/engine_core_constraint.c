@@ -378,50 +378,6 @@ void mj_mulJacVec(const mjModel* m, const mjData* d, mjtNum* res, const mjtNum* 
 
 
 
-// multiply Jacobian by vector, for one island
-//  flg_resunc and flg_vecunc denote whether res/vec are uncompressed
-void mj_mulJacVec_island(const mjModel* m, const mjData* d, mjtNum* res, const mjtNum* vec,
-                         int island, int flg_resunc, int flg_vecunc) {
-  // no island, call regular function
-  if (island < 0) {
-    mj_mulJacVec(m, d, res, vec);
-    return;
-  }
-
-  // sizes
-  int vecnnz = d->island_dofnum[island];
-  int resnnz = d->island_efcnum[island];
-
-  // indices
-  int* vecind = d->island_dofind + d->island_dofadr[island];
-  int* resind = d->island_efcind + d->island_efcadr[island];
-
-  // sparse Jacobian
-  if (mj_isSparse(m)) {
-    for (int i=0; i < resnnz; i++) {
-      int row = resind[i];
-      int Jnnz = d->efc_J_rownnz[row];
-      int Jrowadr = d->efc_J_rowadr[row];
-      int* Jind = d->efc_J_colind + Jrowadr;
-      mjtNum* J = d->efc_J + Jrowadr;
-      int j = flg_resunc ? row : i;
-      res[j] = mju_dotSparse2(J, vec, Jnnz, Jind, vecnnz, vecind, flg_vecunc);
-    }
-  }
-
-  // dense Jacobian
-  else {
-    int nv = m->nv;
-    for (int i=0; i < resnnz; i++) {
-      int row = resind[i];
-      int j = flg_resunc ? row : i;
-      res[j] = mju_dotSparse(vec, d->efc_J + nv*row, vecnnz, vecind, flg_vecunc);
-    }
-  }
-}
-
-
-
 // multiply JacobianT by vector
 void mj_mulJacTVec(const mjModel* m, const mjData* d, mjtNum* res, const mjtNum* vec) {
   // exit if no constraints
@@ -438,50 +394,6 @@ void mj_mulJacTVec(const mjModel* m, const mjData* d, mjtNum* res, const mjtNum*
   // dense Jacobian
   else {
     mju_mulMatTVec(res, d->efc_J, vec, d->nefc, m->nv);
-  }
-}
-
-
-
-// multiply Jacobian transpose by vector, for one island
-//  flg_resunc and flg_vecunc denote whether res/vec are uncompressed
-void mj_mulJacTVec_island(const mjModel* m, const mjData* d, mjtNum* res, const mjtNum* vec,
-                          int island, int flg_resunc, int flg_vecunc) {
-  // no island, call regular function
-  if (island < 0) {
-    mj_mulJacTVec(m, d, res, vec);
-    return;
-  }
-
-  // sizes
-  int vecnnz = d->island_efcnum[island];
-  int resnnz = d->island_dofnum[island];
-
-  // indices
-  int* vecind = d->island_efcind + d->island_efcadr[island];
-  int* resind = d->island_dofind + d->island_dofadr[island];
-
-  // sparse Jacobian
-  if (mj_isSparse(m)) {
-    for (int i=0; i < resnnz; i++) {
-      int row = resind[i];
-      int JTnnz = d->efc_JT_rownnz[row];
-      int JTrowadr = d->efc_JT_rowadr[row];
-      int* JTind = d->efc_JT_colind + JTrowadr;
-      mjtNum* JT = d->efc_JT + JTrowadr;
-      int j = flg_resunc ? row : i;
-      res[j] = mju_dotSparse2(JT, vec, JTnnz, JTind, vecnnz, vecind, flg_vecunc);
-    }
-  }
-
-  // dense Jacobian
-  else {
-    int nefc = d->nefc;
-    for (int i=0; i < resnnz; i++) {
-      int row = resind[i];
-      int j = flg_resunc ? row : i;
-      res[j] = mju_dotSparse(vec, d->efc_JT + nefc*row, vecnnz, vecind, flg_vecunc);
-    }
   }
 }
 
@@ -518,244 +430,246 @@ void mj_instantiateEquality(const mjModel* m, mjData* d) {
 
   // find active equality constraints
   for (int i=0; i < m->neq; i++) {
-    if (d->eq_active[i]) {
-      // get constraint data
-      data = m->eq_data + mjNEQDATA*i;
-      id[0] = m->eq_obj1id[i];
-      id[1] = m->eq_obj2id[i];
-      size = 0;
-      NV = 0;
-      NV2 = 0;
-      int body_id[2];
+    if (!d->eq_active[i]) {
+      continue;
+    }
 
-      // process according to type
-      switch ((mjtEq) m->eq_type[i]) {
-      case mjEQ_CONNECT:              // connect bodies with ball joint
-        // find global points, body semantic
-        if (m->eq_objtype[i] == mjOBJ_BODY) {
-          for (int j=0; j < 2; j++) {
-            mju_mulMatVec3(pos[j], d->xmat + 9*id[j], data + 3*j);
-            mju_addTo3(pos[j], d->xpos + 3*id[j]);
-            body_id[j] = id[j];
-          }
+    // get constraint data
+    data = m->eq_data + mjNEQDATA*i;
+    id[0] = m->eq_obj1id[i];
+    id[1] = m->eq_obj2id[i];
+    size = 0;
+    NV = 0;
+    NV2 = 0;
+    int body_id[2];
+
+    // process according to type
+    switch ((mjtEq) m->eq_type[i]) {
+    case mjEQ_CONNECT:              // connect bodies with ball joint
+      // find global points, body semantic
+      if (m->eq_objtype[i] == mjOBJ_BODY) {
+        for (int j=0; j < 2; j++) {
+          mju_mulMatVec3(pos[j], d->xmat + 9*id[j], data + 3*j);
+          mju_addTo3(pos[j], d->xpos + 3*id[j]);
+          body_id[j] = id[j];
         }
-
-        // find global points, site semantic
-        else {
-          for (int j=0; j < 2; j++) {
-            mju_copy3(pos[j], d->site_xpos + 3*id[j]);
-            body_id[j] = m->site_bodyid[id[j]];
-          }
-        }
-
-        // compute position error
-        mju_sub3(cpos, pos[0], pos[1]);
-
-        // compute Jacobian difference (opposite of contact: 0 - 1)
-        NV = mj_jacDifPair(m, d, chain, body_id[1], body_id[0], pos[1], pos[0],
-                           jac[1], jac[0], jacdif, NULL, NULL, NULL);
-
-        // copy difference into jac[0]
-        mju_copy(jac[0], jacdif, 3*NV);
-
-        size = 3;
-        break;
-
-      case mjEQ_WELD:                 // fix relative position and orientation
-        // find global points, body semantic
-        if (m->eq_objtype[i] == mjOBJ_BODY) {
-          for (int j=0; j < 2; j++) {
-            mjtNum* anchor = data + 3*(1-j);
-            mju_mulMatVec3(pos[j], d->xmat + 9*id[j], anchor);
-            mju_addTo3(pos[j], d->xpos + 3*id[j]);
-            body_id[j] = id[j];
-          }
-        }
-
-        // find global points, site semantic
-        else {
-          for (int j=0; j < 2; j++) {
-            mju_copy3(pos[j], d->site_xpos + 3*id[j]);
-            body_id[j] = m->site_bodyid[id[j]];
-          }
-        }
-
-        // compute position error
-        mju_sub3(cpos, pos[0], pos[1]);
-
-        // get torquescale coefficient
-        mjtNum torquescale = data[10];
-
-        // compute error Jacobian (opposite of contact: 0 - 1)
-        NV = mj_jacDifPair(m, d, chain, body_id[1], body_id[0], pos[1], pos[0],
-                           jac[1], jac[0], jacdif,
-                           jac[1]+3*nv, jac[0]+3*nv, jacdif+3*nv);
-
-        // copy difference into jac[0], compress translation:rotation if sparse
-        mju_copy(jac[0], jacdif, 3*NV);
-        mju_copy(jac[0]+3*NV, jacdif+3*nv, 3*NV);
-
-        // orientation, body semantic
-        if (m->eq_objtype[i] == mjOBJ_BODY) {
-          // compute orientation error: neg(q1) * q0 * relpose (axis components only)
-          mjtNum* relpose = data+6;
-          mju_mulQuat(quat, d->xquat+4*id[0], relpose);   // quat = q0*relpose
-          mju_negQuat(quat1, d->xquat+4*id[1]);           // quat1 = neg(q1)
-        }
-
-        // orientation, site semantic
-        else {
-          mjtNum quat_site1[4];
-          mju_mulQuat(quat, d->xquat+4*body_id[0], m->site_quat+4*id[0]);
-          mju_mulQuat(quat_site1, d->xquat+4*body_id[1], m->site_quat+4*id[1]);
-          mju_negQuat(quat1, quat_site1);
-        }
-
-        mju_mulQuat(quat2, quat1, quat);
-        mju_scl3(cpos+3, quat2+1, torquescale);         // scale axis components by torquescale
-
-        // correct rotation Jacobian: 0.5 * neg(q1) * (jac0-jac1) * q0 * relpose
-        for (int j=0; j < NV; j++) {
-          // axis = [jac0-jac1]_col(j)
-          axis[0] = jac[0][3*NV+j];
-          axis[1] = jac[0][4*NV+j];
-          axis[2] = jac[0][5*NV+j];
-
-          // apply formula
-          mju_mulQuatAxis(quat2, quat1, axis);    // quat2 = neg(q1)*(jac0-jac1)
-          mju_mulQuat(quat3, quat2, quat);        // quat3 = neg(q1)*(jac0-jac1)*q0*relpose
-
-          // correct Jacobian
-          jac[0][3*NV+j] = 0.5*quat3[1];
-          jac[0][4*NV+j] = 0.5*quat3[2];
-          jac[0][5*NV+j] = 0.5*quat3[3];
-        }
-
-        // scale rotational jacobian by torquescale
-        mju_scl(jac[0]+3*NV, jac[0]+3*NV, torquescale, 3*NV);
-
-        size = 6;
-        break;
-
-      case mjEQ_JOINT:                // couple joint values with cubic
-      case mjEQ_TENDON:               // couple tendon lengths with cubic
-        // get scalar positions and their Jacobians
-        for (int j=0; j < 1+(id[1] >= 0); j++) {
-          if (m->eq_type[i] == mjEQ_JOINT) {    // joint object
-            pos[j][0] = d->qpos[m->jnt_qposadr[id[j]]];
-            ref[j] = m->qpos0[m->jnt_qposadr[id[j]]];
-
-            // make Jacobian: sparse or dense
-            if (issparse) {
-              // add first or second joint
-              if (j == 0) {
-                NV = 1;
-                chain[0] = m->jnt_dofadr[id[j]];
-                jac[j][0] = 1;
-              } else {
-                NV2 = 1;
-                chain2[0] = m->jnt_dofadr[id[j]];
-                jac[j][0] = 1;
-              }
-            } else {
-              mju_zero(jac[j], nv);
-              jac[j][m->jnt_dofadr[id[j]]] = 1;
-            }
-          } else {                            // tendon object
-            pos[j][0] = d->ten_length[id[j]];
-            ref[j] = m->tendon_length0[id[j]];
-
-            // set tendon_efcadr
-            if (d->tendon_efcadr[id[j]] == -1) {
-              d->tendon_efcadr[id[j]] = i;
-            }
-
-            // copy Jacobian: sparse or dense
-            if (issparse) {
-              // add first or second chain
-              if (j == 0) {
-                NV = d->ten_J_rownnz[id[j]];
-                mju_copyInt(chain, d->ten_J_colind+d->ten_J_rowadr[id[j]], NV);
-                mju_copy(jac[j], d->ten_J+d->ten_J_rowadr[id[j]], NV);
-              } else {
-                NV2 = d->ten_J_rownnz[id[j]];
-                mju_copyInt(chain2, d->ten_J_colind+d->ten_J_rowadr[id[j]], NV2);
-                mju_copy(jac[j], d->ten_J+d->ten_J_rowadr[id[j]], NV2);
-              }
-            } else {
-              mju_copy(jac[j], d->ten_J+id[j]*nv, nv);
-            }
-          }
-        }
-
-        // both objects defined
-        if (id[1] >= 0) {
-          // compute position error
-          dif = pos[1][0] - ref[1];
-          cpos[0] = pos[0][0] - ref[0] - data[0] -
-                    (data[1]*dif + data[2]*dif*dif + data[3]*dif*dif*dif + data[4]*dif*dif*dif*dif);
-
-          // compute derivative
-          deriv = data[1] + 2*data[2]*dif + 3*data[3]*dif*dif + 4*data[4]*dif*dif*dif;
-
-          // compute Jacobian: sparse or dense
-          if (issparse) {
-            NV = mju_combineSparse(jac[0], jac[1], 1, -deriv, NV, NV2, chain,
-                                   chain2, sparse_buf, buf_ind);
-          } else {
-            mju_addToScl(jac[0], jac[1], -deriv, nv);
-          }
-        }
-
-        // only one object defined
-        else {
-          // compute position error
-          cpos[0] = pos[0][0] - ref[0] - data[0];
-
-          // jac[0] already has the correct Jacobian
-        }
-
-        size = 1;
-        break;
-
-      case mjEQ_FLEX:
-        flex_edgeadr = m->flex_edgeadr[id[0]];
-        flex_edgenum = m->flex_edgenum[id[0]];
-        // add one constraint per non-rigid edge
-        for (int e=flex_edgeadr; e < flex_edgeadr+flex_edgenum; e++) {
-          // skip rigid
-          if (m->flexedge_rigid[e]) {
-            continue;
-          }
-
-          // position error
-          cpos[0] = d->flexedge_length[e] - m->flexedge_length0[e];
-
-          // add constraint: sparse or dense
-          if (issparse) {
-            mj_addConstraint(m, d, d->flexedge_J+d->flexedge_J_rowadr[e], cpos, 0, 0,
-                             1, mjCNSTR_EQUALITY, i,
-                             d->flexedge_J_rownnz[e],
-                             d->flexedge_J_colind+d->flexedge_J_rowadr[e]);
-          } else {
-            mj_addConstraint(m, d, d->flexedge_J+e*nv, cpos, 0, 0,
-                             1, mjCNSTR_EQUALITY, i,
-                             0, NULL);
-          }
-        }
-        break;
-
-      default:                    // SHOULD NOT OCCUR
-        mjERROR("invalid equality constraint type %d", m->eq_type[i]);
       }
 
-      // add constraint
-      if (size) {
-        mj_addConstraint(m, d, jac[0], cpos, 0, 0,
-                         size, mjCNSTR_EQUALITY, i,
-                         issparse ? NV : 0,
-                         issparse ? chain : NULL);
+      // find global points, site semantic
+      else {
+        for (int j=0; j < 2; j++) {
+          mju_copy3(pos[j], d->site_xpos + 3*id[j]);
+          body_id[j] = m->site_bodyid[id[j]];
+        }
       }
+
+      // compute position error
+      mju_sub3(cpos, pos[0], pos[1]);
+
+      // compute Jacobian difference (opposite of contact: 0 - 1)
+      NV = mj_jacDifPair(m, d, chain, body_id[1], body_id[0], pos[1], pos[0],
+                          jac[1], jac[0], jacdif, NULL, NULL, NULL);
+
+      // copy difference into jac[0]
+      mju_copy(jac[0], jacdif, 3*NV);
+
+      size = 3;
+      break;
+
+    case mjEQ_WELD:                 // fix relative position and orientation
+      // find global points, body semantic
+      if (m->eq_objtype[i] == mjOBJ_BODY) {
+        for (int j=0; j < 2; j++) {
+          mjtNum* anchor = data + 3*(1-j);
+          mju_mulMatVec3(pos[j], d->xmat + 9*id[j], anchor);
+          mju_addTo3(pos[j], d->xpos + 3*id[j]);
+          body_id[j] = id[j];
+        }
+      }
+
+      // find global points, site semantic
+      else {
+        for (int j=0; j < 2; j++) {
+          mju_copy3(pos[j], d->site_xpos + 3*id[j]);
+          body_id[j] = m->site_bodyid[id[j]];
+        }
+      }
+
+      // compute position error
+      mju_sub3(cpos, pos[0], pos[1]);
+
+      // get torquescale coefficient
+      mjtNum torquescale = data[10];
+
+      // compute error Jacobian (opposite of contact: 0 - 1)
+      NV = mj_jacDifPair(m, d, chain, body_id[1], body_id[0], pos[1], pos[0],
+                          jac[1], jac[0], jacdif,
+                          jac[1]+3*nv, jac[0]+3*nv, jacdif+3*nv);
+
+      // copy difference into jac[0], compress translation:rotation if sparse
+      mju_copy(jac[0], jacdif, 3*NV);
+      mju_copy(jac[0]+3*NV, jacdif+3*nv, 3*NV);
+
+      // orientation, body semantic
+      if (m->eq_objtype[i] == mjOBJ_BODY) {
+        // compute orientation error: neg(q1) * q0 * relpose (axis components only)
+        mjtNum* relpose = data+6;
+        mju_mulQuat(quat, d->xquat+4*id[0], relpose);   // quat = q0*relpose
+        mju_negQuat(quat1, d->xquat+4*id[1]);           // quat1 = neg(q1)
+      }
+
+      // orientation, site semantic
+      else {
+        mjtNum quat_site1[4];
+        mju_mulQuat(quat, d->xquat+4*body_id[0], m->site_quat+4*id[0]);
+        mju_mulQuat(quat_site1, d->xquat+4*body_id[1], m->site_quat+4*id[1]);
+        mju_negQuat(quat1, quat_site1);
+      }
+
+      mju_mulQuat(quat2, quat1, quat);
+      mju_scl3(cpos+3, quat2+1, torquescale);         // scale axis components by torquescale
+
+      // correct rotation Jacobian: 0.5 * neg(q1) * (jac0-jac1) * q0 * relpose
+      for (int j=0; j < NV; j++) {
+        // axis = [jac0-jac1]_col(j)
+        axis[0] = jac[0][3*NV+j];
+        axis[1] = jac[0][4*NV+j];
+        axis[2] = jac[0][5*NV+j];
+
+        // apply formula
+        mju_mulQuatAxis(quat2, quat1, axis);    // quat2 = neg(q1)*(jac0-jac1)
+        mju_mulQuat(quat3, quat2, quat);        // quat3 = neg(q1)*(jac0-jac1)*q0*relpose
+
+        // correct Jacobian
+        jac[0][3*NV+j] = 0.5*quat3[1];
+        jac[0][4*NV+j] = 0.5*quat3[2];
+        jac[0][5*NV+j] = 0.5*quat3[3];
+      }
+
+      // scale rotational jacobian by torquescale
+      mju_scl(jac[0]+3*NV, jac[0]+3*NV, torquescale, 3*NV);
+
+      size = 6;
+      break;
+
+    case mjEQ_JOINT:                // couple joint values with cubic
+    case mjEQ_TENDON:               // couple tendon lengths with cubic
+      // get scalar positions and their Jacobians
+      for (int j=0; j < 1+(id[1] >= 0); j++) {
+        if (m->eq_type[i] == mjEQ_JOINT) {    // joint object
+          pos[j][0] = d->qpos[m->jnt_qposadr[id[j]]];
+          ref[j] = m->qpos0[m->jnt_qposadr[id[j]]];
+
+          // make Jacobian: sparse or dense
+          if (issparse) {
+            // add first or second joint
+            if (j == 0) {
+              NV = 1;
+              chain[0] = m->jnt_dofadr[id[j]];
+              jac[j][0] = 1;
+            } else {
+              NV2 = 1;
+              chain2[0] = m->jnt_dofadr[id[j]];
+              jac[j][0] = 1;
+            }
+          } else {
+            mju_zero(jac[j], nv);
+            jac[j][m->jnt_dofadr[id[j]]] = 1;
+          }
+        } else {                            // tendon object
+          pos[j][0] = d->ten_length[id[j]];
+          ref[j] = m->tendon_length0[id[j]];
+
+          // set tendon_efcadr
+          if (d->tendon_efcadr[id[j]] == -1) {
+            d->tendon_efcadr[id[j]] = i;
+          }
+
+          // copy Jacobian: sparse or dense
+          if (issparse) {
+            // add first or second chain
+            if (j == 0) {
+              NV = d->ten_J_rownnz[id[j]];
+              mju_copyInt(chain, d->ten_J_colind+d->ten_J_rowadr[id[j]], NV);
+              mju_copy(jac[j], d->ten_J+d->ten_J_rowadr[id[j]], NV);
+            } else {
+              NV2 = d->ten_J_rownnz[id[j]];
+              mju_copyInt(chain2, d->ten_J_colind+d->ten_J_rowadr[id[j]], NV2);
+              mju_copy(jac[j], d->ten_J+d->ten_J_rowadr[id[j]], NV2);
+            }
+          } else {
+            mju_copy(jac[j], d->ten_J+id[j]*nv, nv);
+          }
+        }
+      }
+
+      // both objects defined
+      if (id[1] >= 0) {
+        // compute position error
+        dif = pos[1][0] - ref[1];
+        cpos[0] = pos[0][0] - ref[0] - data[0] -
+                  (data[1]*dif + data[2]*dif*dif + data[3]*dif*dif*dif + data[4]*dif*dif*dif*dif);
+
+        // compute derivative
+        deriv = data[1] + 2*data[2]*dif + 3*data[3]*dif*dif + 4*data[4]*dif*dif*dif;
+
+        // compute Jacobian: sparse or dense
+        if (issparse) {
+          NV = mju_combineSparse(jac[0], jac[1], 1, -deriv, NV, NV2, chain,
+                                  chain2, sparse_buf, buf_ind);
+        } else {
+          mju_addToScl(jac[0], jac[1], -deriv, nv);
+        }
+      }
+
+      // only one object defined
+      else {
+        // compute position error
+        cpos[0] = pos[0][0] - ref[0] - data[0];
+
+        // jac[0] already has the correct Jacobian
+      }
+
+      size = 1;
+      break;
+
+    case mjEQ_FLEX:
+      flex_edgeadr = m->flex_edgeadr[id[0]];
+      flex_edgenum = m->flex_edgenum[id[0]];
+      // add one constraint per non-rigid edge
+      for (int e=flex_edgeadr; e < flex_edgeadr+flex_edgenum; e++) {
+        // skip rigid
+        if (m->flexedge_rigid[e]) {
+          continue;
+        }
+
+        // position error
+        cpos[0] = d->flexedge_length[e] - m->flexedge_length0[e];
+
+        // add constraint: sparse or dense
+        if (issparse) {
+          mj_addConstraint(m, d, d->flexedge_J+d->flexedge_J_rowadr[e], cpos, 0, 0,
+                            1, mjCNSTR_EQUALITY, i,
+                            d->flexedge_J_rownnz[e],
+                            d->flexedge_J_colind+d->flexedge_J_rowadr[e]);
+        } else {
+          mj_addConstraint(m, d, d->flexedge_J+e*nv, cpos, 0, 0,
+                            1, mjCNSTR_EQUALITY, i,
+                            0, NULL);
+        }
+      }
+      break;
+
+    default:                    // SHOULD NOT OCCUR
+      mjERROR("invalid equality constraint type %d", m->eq_type[i]);
+    }
+
+    // add constraint
+    if (size) {
+      mj_addConstraint(m, d, jac[0], cpos, 0, 0,
+                       size, mjCNSTR_EQUALITY, i,
+                       issparse ? NV : 0,
+                       issparse ? chain : NULL);
     }
   }
 
@@ -1476,7 +1390,7 @@ static void getimpedance(const mjtNum* solimp, mjtNum pos, mjtNum margin,
     yP = solimp[4] * a*power(x, solimp[4]-1);
   }
 
-  // y(x) = 1-b*(1-x)^p is x>midpoint
+  // y(x) = 1-b*(1-x)^p if x>midpoint
   else {
     mjtNum b = 1/power(1-solimp[3], solimp[4]-1);
     y = 1-b*power(1-x, solimp[4]);
@@ -2084,7 +1998,7 @@ void mj_makeConstraint(const mjModel* m, mjData* d) {
   if (mj_isSparse(m)) {
     // transpose
     mju_transposeSparse(d->efc_JT, d->efc_J, d->nefc, m->nv,
-                        d->efc_JT_rownnz, d->efc_JT_rowadr, d->efc_JT_colind,
+                        d->efc_JT_rownnz, d->efc_JT_rowadr, d->efc_JT_colind, d->efc_JT_rowsuper,
                         d->efc_J_rownnz, d->efc_J_rowadr, d->efc_J_colind);
 
 
@@ -2098,14 +2012,6 @@ void mj_makeConstraint(const mjModel* m, mjData* d) {
     __msan_allocated_memory(d->efc_J_rowsuper, d->nefc);
   #endif  // MEMORY_SANITIZER
 #endif  // mjUSEAVX
-
-    // supernodes of JT
-    mju_superSparse(m->nv, d->efc_JT_rowsuper,
-                    d->efc_JT_rownnz, d->efc_JT_rowadr, d->efc_JT_colind);
-  } else {
-    if (mjENABLED(mjENBL_ISLAND)) {
-      mju_transpose(d->efc_JT, d->efc_J, d->nefc, m->nv);
-    }
   }
 
   // compute diagApprox
@@ -2167,11 +2073,11 @@ void mj_projectConstraint(const mjModel* m, mjData* d) {
           continue;
         }
 
-        // traverse row j of M, marking new unique nonzeros
-        int nnzM = d->M_rownnz[j];
-        int adrM = d->M_rowadr[j];
-        for (int k=0; k < nnzM; k++) {
-          int c = d->M_colind[adrM + k];
+        // traverse row j of C, marking new unique nonzeros
+        int nnzC = d->M_rownnz[j];
+        int adrC = d->M_rowadr[j];
+        for (int k=0; k < nnzC; k++) {
+          int c = d->M_colind[adrC + k];
           if (marker[c] != r) {
             marker[c] = r;
             nnz++;
@@ -2251,10 +2157,10 @@ void mj_projectConstraint(const mjModel* m, mjData* d) {
           continue;
         }
         int j = B_colind[i];
-        int adrM = d->M_rowadr[j];
-        mju_addToSclSparseInc(B + adrB, d->qLD + adrM,
+        int adrC = d->M_rowadr[j];
+        mju_addToSclSparseInc(B + adrB, d->qLD + adrC,
                               nnzB, B_colind + adrB,
-                              d->M_rownnz[j]-1, d->M_colind + adrM, -b);
+                              d->M_rownnz[j]-1, d->M_colind + adrC, -b);
       }
 
       // B(r,:) <- sqrt(inv(D)) * B(r,:)
@@ -2274,7 +2180,7 @@ void mj_projectConstraint(const mjModel* m, mjData* d) {
     int* BT_colind = mjSTACKALLOC(d, nB, int);
     mjtNum* BT = mjSTACKALLOC(d, nB, mjtNum);
     mju_transposeSparse(BT, B, nefc, nv,
-                        BT_rownnz, BT_rowadr, BT_colind,
+                        BT_rownnz, BT_rowadr, BT_colind, NULL,
                         B_rownnz, B_rowadr, B_colind);
 
     // allocate AR row nonzeros and addresses on arena
@@ -2289,12 +2195,9 @@ void mj_projectConstraint(const mjModel* m, mjData* d) {
     }
 
     // pre-count A nonzeros (compute AR_rownnz, AR_rowadr)
-    mju_sqrMatTDSparseCount(d->efc_AR_rownnz, d->efc_AR_rowadr, nefc,
-                            BT_rownnz, BT_rowadr, BT_colind,
-                            B_rownnz, B_rowadr, B_colind, B_rowsuper, d, /*flg_upper=*/1);
-
-    // nA = total number of nonzeros in A
-    d->nA = d->efc_AR_rownnz[nefc - 1] + d->efc_AR_rowadr[nefc - 1];
+    d->nA = mju_sqrMatTDSparseCount(d->efc_AR_rownnz, d->efc_AR_rowadr, nefc,
+                                    BT_rownnz, BT_rowadr, BT_colind,
+                                    B_rownnz, B_rowadr, B_colind, B_rowsuper, d, /*flg_upper=*/1);
 
     // allocate A values and column indices on arena
     d->efc_AR = mj_arenaAllocByte(d, sizeof(mjtNum) * d->nA, _Alignof(mjtNum));
@@ -2377,25 +2280,17 @@ void mj_referenceConstraint(const mjModel* m, mjData* d) {
 
 //---------------------------- update constraint state ---------------------------------------------
 
-// compute efc_state, efc_force, qfrc_constraint, optionally restricted to one island
-//  island < 0: update all d->nefc constraints
-//  island >= 0: update only d->island_efcnum[island] constraints
-//  jar = Jac*qacc-aref is restricted to the island, in the above sense
-//  optional: cost(qacc) = shat(jar); cone Hessians
-void mj_constraintUpdate_island(const mjModel* m, mjData* d, const mjtNum* jar,
-                                mjtNum cost[1], int flg_coneHessian, int island) {
-  int ne = d->ne, nf = d->nf;
-  const mjtNum *D = d->efc_D, *R = d->efc_R, *floss = d->efc_frictionloss;
-  mjtNum* force = d->efc_force;
+// compute efc_state, efc_force
+//  optional: cost(qacc) = s_hat(jar); cone Hessians
+void mj_constraintUpdate_impl(int ne, int nf, int nefc,
+                              const mjtNum* D, const mjtNum* R, const mjtNum* floss,
+                              const mjtNum* jar, const int* type, const int* id,
+                              mjContact* contact, int* state, mjtNum* force, mjtNum cost[1],
+                              int flg_coneHessian) {
   mjtNum s = 0;
 
-  int nefc    = island < 0 ? d->nefc : d->island_efcnum[island];
-  int* efcind = island < 0 ? NULL    : d->island_efcind + d->island_efcadr[island];
-
-  // no constraints: clear qfrc_constraint and cost, return
+  // no constraints: clear cost, return
   if (!nefc) {
-    // can only occur for island == -1
-    mju_zero(d->qfrc_constraint, m->nv);
     if (cost) {
       *cost = 0;
     }
@@ -2403,55 +2298,49 @@ void mj_constraintUpdate_island(const mjModel* m, mjData* d, const mjtNum* jar,
   }
 
   // compute unconstrained efc_force
-  for (int c=0; c < nefc; c++) {
-    int i = efcind ? efcind[c] : c;
-    force[i] = -D[i]*jar[c];
+  for (int i=0; i < nefc; i++) {
+    force[i] = -D[i]*jar[i];
   }
 
   // update constraints
-  for (int c=0; c < nefc; c++) {
-    int i = efcind ? efcind[c] : c;
-
+  for (int i=0; i < nefc; i++) {
     // ==== equality
     if (i < ne) {
       if (cost) {
-        s += 0.5*D[i]*jar[c]*jar[c];
+        s += 0.5*D[i]*jar[i]*jar[i];
       }
-      d->efc_state[i] = mjCNSTRSTATE_QUADRATIC;
+      state[i] = mjCNSTRSTATE_QUADRATIC;
       continue;
     }
 
     // ==== friction
     if (i < ne + nf) {
       // linear negative
-      if (jar[c] <= -R[i]*floss[i]) {
+      if (jar[i] <= -R[i]*floss[i]) {
         if (cost) {
-          s += -0.5*R[i]*floss[i]*floss[i] - floss[i]*jar[c];
+          s += -0.5*R[i]*floss[i]*floss[i] - floss[i]*jar[i];
         }
 
         force[i] = floss[i];
-
-        d->efc_state[i] = mjCNSTRSTATE_LINEARNEG;
+        state[i] = mjCNSTRSTATE_LINEARNEG;
       }
 
       // linear positive
-      else if (jar[c] >= R[i]*floss[i]) {
+      else if (jar[i] >= R[i]*floss[i]) {
         if (cost) {
-          s += -0.5*R[i]*floss[i]*floss[i] + floss[i]*jar[c];
+          s += -0.5*R[i]*floss[i]*floss[i] + floss[i]*jar[i];
         }
 
         force[i] = -floss[i];
-
-        d->efc_state[i] = mjCNSTRSTATE_LINEARPOS;
+        state[i] = mjCNSTRSTATE_LINEARPOS;
       }
 
       // quadratic
       else {
         if (cost) {
-          s += 0.5*D[i]*jar[c]*jar[c];
+          s += 0.5*D[i]*jar[i]*jar[i];
         }
-
-        d->efc_state[i] = mjCNSTRSTATE_QUADRATIC;
+        state[i] = mjCNSTRSTATE_QUADRATIC;
       }
       continue;
     }
@@ -2459,36 +2348,35 @@ void mj_constraintUpdate_island(const mjModel* m, mjData* d, const mjtNum* jar,
     // ==== contact
 
     // non-negative constraint
-    if (d->efc_type[i] != mjCNSTR_CONTACT_ELLIPTIC) {
+    if (type[i] != mjCNSTR_CONTACT_ELLIPTIC) {
       // constraint is satisfied: no cost
-      if (jar[c] >= 0) {
+      if (jar[i] >= 0) {
         force[i] = 0;
 
-        d->efc_state[i] = mjCNSTRSTATE_SATISFIED;
+        state[i] = mjCNSTRSTATE_SATISFIED;
       }
 
       // quadratic
       else {
         if (cost) {
-          s += 0.5*D[i]*jar[c]*jar[c];
+          s += 0.5*D[i]*jar[i]*jar[i];
         }
-
-        d->efc_state[i] = mjCNSTRSTATE_QUADRATIC;
+        state[i] = mjCNSTRSTATE_QUADRATIC;
       }
     }
 
     // contact with elliptic cone
     else {
       // get contact
-      mjContact* con = d->contact + d->efc_id[i];
+      mjContact* con = contact + id[i];
       mjtNum mu = con->mu, *friction = con->friction;
       int dim = con->dim;
 
       // map to regular dual cone space
       mjtNum U[6];
-      U[0] = jar[c]*mu;
+      U[0] = jar[i]*mu;
       for (int j=1; j < dim; j++) {
-        U[j] = jar[c+j]*friction[j-1];
+        U[j] = jar[i+j]*friction[j-1];
       }
 
       // decompose into normal and tangent
@@ -2498,19 +2386,17 @@ void mj_constraintUpdate_island(const mjModel* m, mjData* d, const mjtNum* jar,
       // top zone
       if (N >= mu*T || (T <= 0 && N >= 0)) {
         mju_zero(force+i, dim);
-
-        d->efc_state[i] = mjCNSTRSTATE_SATISFIED;
+        state[i] = mjCNSTRSTATE_SATISFIED;
       }
 
       // bottom zone
       else if (mu*N+T <= 0 || (T <= 0 && N < 0)) {
         if (cost) {
           for (int j=0; j < dim; j++) {
-            s += 0.5*D[i+j]*jar[c+j]*jar[c+j];
+            s += 0.5*D[i+j]*jar[i+j]*jar[i+j];
           }
         }
-
-        d->efc_state[i] = mjCNSTRSTATE_QUADRATIC;
+        state[i] = mjCNSTRSTATE_QUADRATIC;
       }
 
       // middle zone
@@ -2530,12 +2416,12 @@ void mj_constraintUpdate_island(const mjModel* m, mjData* d, const mjtNum* jar,
         }
 
         // set state
-        d->efc_state[i] = mjCNSTRSTATE_CONE;
+        state[i] = mjCNSTRSTATE_CONE;
 
         // cone Hessian
         if (flg_coneHessian) {
           // get Hessian pointer
-          mjtNum* H = d->contact[d->efc_id[i]].H;
+          mjtNum* H = contact[id[i]].H;
 
           // set first row: (1, -mu/T * U)
           mjtNum scl = -mu/T;
@@ -2546,10 +2432,11 @@ void mj_constraintUpdate_island(const mjModel* m, mjData* d, const mjtNum* jar,
 
           // set upper block: mu*N/T^3 * U*U'
           scl = mu*N/(T*T*T);
-          for (int k=1; k < dim; k++)
+          for (int k=1; k < dim; k++) {
             for (int j=k; j < dim; j++) {
               H[k*dim+j] = scl*U[j]*U[k];
             }
+          }
 
           // add to diagonal: (mu^2 - mu*N/T) * I
           scl = mu*mu - mu*N/T;
@@ -2576,18 +2463,13 @@ void mj_constraintUpdate_island(const mjModel* m, mjData* d, const mjtNum* jar,
 
       // replicate state in all cone dimensions
       for (int j=1; j < dim; j++) {
-        d->efc_state[i+j] = d->efc_state[i];
+        state[i+j] = state[i];
       }
 
       // advance to end of contact
-      c += (dim-1);
+      i += (dim-1);
     }
   }
-
-  // compute qfrc_constraint
-  int flg_vecunc = 1;
-  int flg_resunc = 1;
-  mj_mulJacTVec_island(m, d, d->qfrc_constraint, d->efc_force, island, flg_vecunc, flg_resunc);
 
   // assign cost
   if (cost) {
@@ -2598,8 +2480,11 @@ void mj_constraintUpdate_island(const mjModel* m, mjData* d, const mjtNum* jar,
 
 
 // compute efc_state, efc_force, qfrc_constraint
-// optional: cost(qacc) = shat(jar) where jar = Jac*qacc-aref; cone Hessians
+// optional: cost(qacc) = s_hat(jar) where jar = Jac*qacc-aref; cone Hessians
 void mj_constraintUpdate(const mjModel* m, mjData* d, const mjtNum* jar,
                          mjtNum cost[1], int flg_coneHessian) {
-  mj_constraintUpdate_island(m, d, jar, cost, flg_coneHessian, -1);
+  mj_constraintUpdate_impl(d->ne, d->nf, d->nefc, d->efc_D, d->efc_R, d->efc_frictionloss,
+                           jar, d->efc_type, d->efc_id, d->contact, d->efc_state, d->efc_force,
+                           cost, flg_coneHessian);
+  mj_mulJacTVec(m, d, d->qfrc_constraint, d->efc_force);
 }

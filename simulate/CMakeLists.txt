@@ -29,7 +29,7 @@ set(MUJOCO_DEP_VERSION_lodepng
 
 project(
   mujoco_simulate
-  VERSION 3.3.2
+  VERSION 3.3.5
   DESCRIPTION "MuJoCo simulate binaries"
   HOMEPAGE_URL "https://mujoco.org"
 )
@@ -110,6 +110,7 @@ target_sources(
 target_compile_options(platform_ui_adapter PRIVATE ${MUJOCO_SIMULATE_COMPILE_OPTIONS})
 if(APPLE)
   target_sources(platform_ui_adapter PUBLIC glfw_corevideo.h PRIVATE glfw_corevideo.mm)
+  set_source_files_properties(glfw_corevideo.mm PROPERTIES COMPILE_FLAGS -Wno-deprecated-declarations)
   target_link_libraries(platform_ui_adapter PUBLIC "-framework CoreVideo")
 endif()
 target_include_directories(
@@ -172,6 +173,13 @@ if(SIMULATE_BUILD_EXECUTABLE)
     Threads::Threads
     lodepng
   )
+
+  if (MUJOCO_WITH_USD)
+    target_link_libraries(
+      simulate
+      mujoco::usd::mjcf
+    )
+  endif()
 
   target_link_options(simulate PRIVATE ${MUJOCO_SIMULATE_LINK_OPTIONS})
 
@@ -238,6 +246,22 @@ if(SIMULATE_BUILD_EXECUTABLE)
       DEPENDS
       MUJOCO_ENABLE_RPATH
     )
+
+    if (MUJOCO_WITH_USD)
+      target_compile_definitions(simulate PUBLIC mjUSEUSD)
+
+      # Add support to RPATH for the samples.
+      target_add_rpath(
+        TARGETS
+        simulate
+        INSTALL_DIRECTORY
+        "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}"
+        LIB_DIRS
+        ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/mujocoUsd ${USD_DIR}/lib
+        DEPENDS
+        MUJOCO_ENABLE_RPATH
+      )
+    endif()
 
     install(
       TARGETS simulate

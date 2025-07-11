@@ -32,6 +32,7 @@
 
 #include <mujoco/mjspec.h>
 #include "user/user_api.h"
+#include <TriangleMeshDistance/include/tmd/TriangleMeshDistance.h>
 
 #ifdef MUJOCO_TINYOBJLOADER_IMPL
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -139,6 +140,8 @@ mjCMesh::mjCMesh(mjCModel* _model, mjCDef* _def) {
   maxhullvert_ = -1;
   processed_ = false;
   visual_ = true;
+  needoct_ = false;
+  needreorient_ = true;
 
   // reset to default if given
   if (_def) {
@@ -193,7 +196,6 @@ mjCMesh& mjCMesh::operator=(const mjCMesh& other) {
 
 void mjCMesh::PointToLocal() {
   spec.element = static_cast<mjsElement*>(this);
-  spec.name = &name;
   spec.file = &spec_file_;
   spec.content_type = &spec_content_type_;
   spec.uservert = &spec_vert_;
@@ -359,6 +361,8 @@ void mjCMesh::LoadSDF() {
     userface.push_back(index);
   }
 
+  needreorient_ = false;
+  needoct_ = false;
   normal_ = std::move(usernormal);
   face_ = std::move(userface);
   ProcessVertices(uservert);
@@ -406,6 +410,7 @@ void mjCMesh::CacheMesh(mjCCache* cache, const mjResource* resource) {
   }
   mesh->tree_ = tree_;
   mesh->face_aabb_ = face_aabb_;
+  mesh->octree_ = octree_;
 
   // calculate estimated size of mesh
   std::size_t size = sizeof(mjCMesh)
@@ -423,6 +428,7 @@ void mjCMesh::CacheMesh(mjCCache* cache, const mjResource* resource) {
                      + (sizeof(double) * 18)
                      + (sizeof(int) * ncenter)
                      + tree_.Size()
+                     + octree_.Size()
                      + (sizeof(double) * face_aabb_.size());
 
   std::shared_ptr<const void> cached_data(mesh, +[] (const void* data) {
@@ -676,10 +682,37 @@ void mjCMesh::TryCompile(const mjVFS* vfs) {
   // compute mesh properties
   if (!fromCache) {
     Process();
+  }
 
-    if (!file_.empty()) {
-      CacheMesh(cache, resource_);
+  // make octree
+  if (!needoct_) {
+    octree_.Clear();  // this occurs when a non-SDF mesh is loaded from a cached SDF mesh
+  } else if (octree_.Nodes().empty()) {
+    octree_.SetFace(vert_, face_);
+    octree_.CreateOctree(aamm_);
+
+    // compute sdf coefficients
+    if (!plugin.active) {
+      tmd::TriangleMeshDistance sdf(vert_.data(), nvert(), face_.data(), nface());
+
+      // TODO: do not evaluate the SDF multiple times at the same vertex
+      // TODO: the value at hanging vertices should be computed from the parent
+      const double* nodes = octree_.Nodes().data();
+      for (int i = 0; i < octree_.NumNodes(); ++i) {
+        for (int j = 0; j < 8; j++) {
+            mjtNum v[3];
+            v[0] = nodes[6*i+0] + (j&1 ? 1 : -1) * nodes[6*i+3];
+            v[1] = nodes[6*i+1] + (j&2 ? 1 : -1) * nodes[6*i+4];
+            v[2] = nodes[6*i+2] + (j&4 ? 1 : -1) * nodes[6*i+5];
+            octree_.AddCoeff(sdf.signed_distance(v).distance);
+        }
+      }
     }
+  }
+
+  // cache mesh
+  if (!fromCache && !file_.empty()) {
+    CacheMesh(cache, resource_);
   }
 
   // close resource
@@ -1012,30 +1045,28 @@ void mjCMesh::LoadOBJ(mjResource* resource, bool remove_repeated) {
 
 // load mesh from cached asset, return true on success
 bool mjCMesh::LoadCachedMesh(mjCCache *cache, const mjResource* resource) {
-  // save previous mesh properties (in case different from cached mesh)
-  int maxhullvert = maxhullvert_;
-  mjtMeshInertia old_inertia = inertia;
-  double old_scale[3] = {scale[0], scale[1], scale[2]};
-
   auto process_mesh = [&](const void* data) {
     const mjCMesh* mesh = static_cast<const mjCMesh*>(data);
     // check if maxhullvert is different
-    maxhullvert_ = mesh->maxhullvert_;
-    if (maxhullvert != mesh->maxhullvert_) {
-      return;
+    if (maxhullvert_ != mesh->maxhullvert_) {
+      return false;
     }
 
     // check if inertia is different
-    inertia = mesh->inertia;
-    if (old_inertia != mesh->inertia) {
-      return;
+    if (inertia != mesh->inertia) {
+      return false;
     }
 
     // check if scale is different
-    memcpy(scale, mesh->scale, 3*sizeof(double));
-    if (old_scale[0] != mesh->scale[0] || old_scale[1] != mesh->scale[1] ||
-        old_scale[2] != mesh->scale[2]) {
-      return;
+    if (scale[0] != mesh->scale[0] ||
+        scale[1] != mesh->scale[1] ||
+        scale[2] != mesh->scale[2]) {
+      return false;
+    }
+
+    // check if need hull
+    if (needhull_ && !mesh->szgraph_) {
+      return false;
     }
 
     processed_ = mesh->processed_;
@@ -1047,11 +1078,14 @@ bool mjCMesh::LoadCachedMesh(mjCCache *cache, const mjResource* resource) {
     facetexcoord_ = mesh->facetexcoord_;
     halfedge_ = mesh->halfedge_;
 
-    szgraph_ = mesh->szgraph_;
-    graph_ = nullptr;
-    if (szgraph_) {
-      graph_ = (int*)mju_malloc(szgraph_*sizeof(int));
-      std::copy(mesh->graph_, mesh->graph_ + szgraph_, graph_);
+    // only copy graph if needed
+    if (needhull_ || mesh->face_.empty()) {
+      szgraph_ = mesh->szgraph_;
+      graph_ = nullptr;
+      if (szgraph_) {
+        graph_ = (int*)mju_malloc(szgraph_*sizeof(int));
+        std::copy(mesh->graph_, mesh->graph_ + szgraph_, graph_);
+      }
     }
 
     polygons_ = mesh->polygons_;
@@ -1072,29 +1106,12 @@ bool mjCMesh::LoadCachedMesh(mjCCache *cache, const mjResource* resource) {
     }
     tree_ = mesh->tree_;
     face_aabb_ = mesh->face_aabb_;
+    octree_ = mesh->octree_;
+    return true;
   };
 
-  // check that cached asset has all data, make sure no metadata has changed
-  if (!cache->PopulateData(resource, process_mesh)) {
-    return false;
-  }
-
-  if (maxhullvert != maxhullvert_) {
-    maxhullvert_ = maxhullvert;
-    return false;
-  }
-  if (inertia != old_inertia) {
-    inertia = old_inertia;
-    return false;
-  }
-  if (scale[0] != old_scale[0] || scale[1] != old_scale[1] ||
-      scale[2] != old_scale[2]) {
-    scale[0] = old_scale[0];
-    scale[1] = old_scale[1];
-    scale[2] = old_scale[2];
-    return false;
-  }
-  return true;
+  // check that cached asset has all data
+  return cache->PopulateData(resource, process_mesh);
 }
 
 // load STL binary mesh
@@ -1544,6 +1561,12 @@ void mjCMesh::Process() {
   boxsz_[0] = 0.5 * std::sqrt(6*(eigval[1] + eigval[2] - eigval[0])/volume);
   boxsz_[1] = 0.5 * std::sqrt(6*(eigval[0] + eigval[2] - eigval[1])/volume);
   boxsz_[2] = 0.5 * std::sqrt(6*(eigval[0] + eigval[1] - eigval[2])/volume);
+
+  // prevent reorientation if the mesh was autogenerated using marching cubes
+  if (!needreorient_) {
+    mjuu_setvec(CoM, 0, 0, 0);
+    mjuu_setvec(quattmp, 1, 0, 0, 0);
+  }
 
   // transform CoM to origin
   for (int i=0; i < nvert(); i++) {
@@ -2433,7 +2456,6 @@ mjCSkin& mjCSkin::operator=(const mjCSkin& other) {
 
 void mjCSkin::PointToLocal() {
   spec.element = static_cast<mjsElement*>(this);
-  spec.name = &name;
   spec.file = &spec_file_;
   spec.material = &spec_material_;
   spec.vert = &spec_vert_;
@@ -3035,6 +3057,113 @@ void inline ComputeStiffness(std::vector<double>& stiffness,
   MetricTensor<T>(stiffness.data(), t, mu, la, basis);
 }
 
+// local tetrahedron numbering
+constexpr int kNumEdges = Stencil2D::kNumEdges;
+constexpr int kNumVerts = Stencil2D::kNumVerts;
+constexpr int edge[kNumEdges][2] = {{1, 2}, {2, 0}, {0, 1}};
+
+// create map from triangles to vertices and edges and from edges to vertices
+static void CreateFlapStencil(std::vector<StencilFlap>& flaps,
+                              const std::vector<int>& simplex,
+                              const std::vector<int>& edgeidx) {
+  // populate stencil
+  int ne = 0;
+  int nt = simplex.size() / kNumVerts;
+  std::vector<Stencil2D> elements(nt);
+  for (int t = 0; t < nt; t++) {
+    for (int v = 0; v < kNumVerts; v++) {
+      elements[t].vertices[v] = simplex[kNumVerts * t + v];
+    }
+  }
+
+  // map from edge vertices to their index in `edges` vector
+  std::unordered_map<std::pair<int, int>, int, PairHash> edge_indices;
+
+  // loop over all triangles
+  for (int t = 0; t < nt; t++) {
+    int* v = elements[t].vertices;
+
+    // compute edges to vertices map for fast computations
+    for (int e = 0; e < kNumEdges; e++) {
+      auto pair = std::pair(std::min(v[edge[e][0]], v[edge[e][1]]),
+                            std::max(v[edge[e][0]], v[edge[e][1]]));
+
+      // if edge is already present in the vector only store its index
+      auto [it, inserted] = edge_indices.insert({pair, ne});
+
+      if (inserted) {
+        StencilFlap flap;
+        flap.vertices[0] = v[edge[e][0]];
+        flap.vertices[1] = v[edge[e][1]];
+        flap.vertices[2] = v[(edge[e][1] + 1) % 3];
+        flap.vertices[3] = -1;
+        flaps.push_back(flap);
+        elements[t].edges[e] = ne++;
+      } else {
+        elements[t].edges[e] = it->second;
+        flaps[it->second].vertices[3] = v[(edge[e][1] + 1) % 3];
+      }
+
+      // double check that the edge indices are consistent
+      if (!edgeidx.empty()) {
+        if (elements[t].edges[e] != edgeidx[kNumEdges * t + e]) {
+          mju_error("edge indices do not match in CreateFlapStencil");
+        }
+      }
+    }
+  }
+}
+
+// cotangent between two edges
+double inline cot(double* x, int v0, int v1, int v2) {
+  double normal[3];
+  double edge1[3] = {x[3*v1]-x[3*v0], x[3*v1+1]-x[3*v0+1], x[3*v1+2]-x[3*v0+2]};
+  double edge2[3] = {x[3*v2]-x[3*v0], x[3*v2+1]-x[3*v0+1], x[3*v2+2]-x[3*v0+2]};
+
+  mjuu_crossvec(normal, edge1, edge2);
+  return mjuu_dot3(edge1, edge2) / sqrt(mjuu_dot3(normal, normal));
+}
+
+// area of a triangle
+double inline ComputeVolume(const double* x, const int v[Stencil2D::kNumVerts]) {
+  double normal[3];
+  double edge1[3] = {x[3*v[1]]-x[3*v[0]], x[3*v[1]+1]-x[3*v[0]+1], x[3*v[1]+2]-x[3*v[0]+2]};
+  double edge2[3] = {x[3*v[2]]-x[3*v[0]], x[3*v[2]+1]-x[3*v[0]+1], x[3*v[2]+2]-x[3*v[0]+2]};
+
+  mjuu_crossvec(normal, edge1, edge2);
+  return sqrt(mjuu_dot3(normal, normal)) / 2;
+}
+
+// compute bending stiffness for a single edge
+template <typename T>
+void inline ComputeBending(double* bending, double* pos, const int v[4], double mu,
+                           double thickness) {
+  int vadj[3] = {v[1], v[0], v[3]};
+
+  if (v[3]== -1) {
+    // skip boundary edges
+    return;
+  }
+
+  // cotangent operator from Wardetzky at al., "Discrete Quadratic Curvature
+  // Energies", https://cims.nyu.edu/gcl/papers/wardetzky2007dqb.pdf
+
+  mjtNum a01 = cot(pos, v[0], v[1], v[2]);
+  mjtNum a02 = cot(pos, v[0], v[3], v[1]);
+  mjtNum a03 = cot(pos, v[1], v[2], v[0]);
+  mjtNum a04 = cot(pos, v[1], v[0], v[3]);
+  mjtNum c[4] = {a03 + a04, a01 + a02, -(a01 + a03), -(a02 + a04)};
+  mjtNum volume = ComputeVolume(pos, v) +
+                  ComputeVolume(pos, vadj);
+
+  for (int v1 = 0; v1 < T::kNumVerts; v1++) {
+    for (int v2 = 0; v2 < T::kNumVerts; v2++) {
+      bending[4 * v1 + v2] +=
+          1.5 * c[v1] * c[v2] / volume * mu * pow(thickness, 3) / 12;
+    }
+  }
+}
+
 //----------------------------- linear elasticity --------------------------------------------------
 
 // Gauss Legendre quadrature points in 1 dimension on the interval [a, b]
@@ -3225,7 +3354,6 @@ mjCFlex& mjCFlex::operator=(const mjCFlex& other) {
 
 void mjCFlex::PointToLocal() {
   spec.element = static_cast<mjsElement*>(this);
-  spec.name = &name;
   spec.material = &spec_material_;
   spec.vertbody = &spec_vertbody_;
   spec.nodebody = &spec_nodebody_;
@@ -3292,9 +3420,13 @@ void mjCFlex::ResolveReferences(const mjCModel* m) {
   vertbodyid.clear();
   nodebodyid.clear();
   for (const auto& vertbody : vertbody_) {
-    mjCBase* pbody = m->FindObject(mjOBJ_BODY, vertbody);
+    mjCBody* pbody = static_cast<mjCBody*>(m->FindObject(mjOBJ_BODY, vertbody));
     if (pbody) {
       vertbodyid.push_back(pbody->id);
+      if (pbody->joints.size() != 3 && dim == 2 && (elastic2d == 1 || elastic2d == 3)) {
+        // TODO(quaglino): add support for pins
+        throw mjCError(this, "pins are not supported for bending");
+      }
     } else {
       throw mjCError(this, "unknown body '%s' in flex", vertbody.c_str());
     }
@@ -3530,11 +3662,18 @@ void mjCFlex::Compile(const mjVFS* vfs) {
   // set size
   nedge = (int)edge.size();
 
+  // create flap stencil
+  if (dim == 2) {
+    CreateFlapStencil(flaps, elem_, edgeidx_);
+  }
+
   // compute elasticity
   if (young > 0) {
     if (poisson < 0 || poisson >= 0.5) {
       throw mjCError(this, "Poisson ratio must be in [0, 0.5)");
     }
+
+    // linear elasticity
     stiffness.assign(21*nelem, 0);
     if (interpolated) {
       int min_size = ceil(nodexpos.size()*nodexpos.size() / 21);
@@ -3543,11 +3682,13 @@ void mjCFlex::Compile(const mjVFS* vfs) {
       }
       ComputeLinearStiffness(stiffness, nodexpos.data(), young, poisson);
     }
+
+    // geometrically nonlinear elasticity
     for (unsigned int t = 0; t < nelem; t++) {
       if (interpolated) {
         continue;
       }
-      if (dim == 2) {
+      if (dim == 2 && elastic2d >= 2 && thickness > 0) {
         ComputeStiffness<Stencil2D>(stiffness, vertxpos,
                                     elem_.data() + (dim + 1) * t, t, young,
                                     poisson, thickness);
@@ -3557,13 +3698,22 @@ void mjCFlex::Compile(const mjVFS* vfs) {
                                     poisson);
       }
     }
+
+    // bending stiffness (2D only)
+    if (dim == 2 && (elastic2d == 1 || elastic2d == 3)) {
+      if (thickness < 0) {
+        throw mjCError(this, "thickness must be positive for bending stiffness");
+      }
+      bending.assign(nedge*16, 0);
+
+      for (unsigned int e = 0; e < nedge; e++) {
+        ComputeBending<StencilFlap>(bending.data() + 16 * e, vertxpos.data(), flaps[e].vertices,
+                                    young / (2 * (1 + poisson)), thickness);
+      }
+    }
   }
 
-  // add plugins
-  std::string userface, useredge;
-  userface = VectorToString(elem_);
-  useredge = VectorToString(edgeidx_);
-
+  // placeholder for setting plugins parameters, currently not used
   for (const auto& vbodyid : vertbodyid) {
     if (vbodyid < 0) {
       continue;
@@ -3571,11 +3721,9 @@ void mjCFlex::Compile(const mjVFS* vfs) {
     if (model->Bodies()[vbodyid]->plugin.element) {
       mjCPlugin* plugin_instance =
         static_cast<mjCPlugin*>(model->Bodies()[vbodyid]->plugin.element);
-      if (damping > 0) {
-        plugin_instance->config_attribs["damping"] = std::to_string(damping);
+      if (!plugin_instance) {
+        throw mjCError(this, "plugin instance not found");
       }
-      plugin_instance->config_attribs["face"] = userface;
-      plugin_instance->config_attribs["edge"] = useredge;
     }
   }
 
@@ -3641,8 +3789,9 @@ void mjCFlex::CreateBVH() {
     elemaabb_[6*e+5] = 0.5*(xmax[2]-xmin[2]) + radius;
 
     // add bounding volume for this element
+    // contype and conaffinity are set to nonzero to force bvh generation
     const double* aabb = elemaabb_.data() + 6*e;
-    tree.AddBoundingVolume(e, contype, conaffinity, aabb, nullptr, aabb);
+    tree.AddBoundingVolume(e, 1, 1, aabb, nullptr, aabb);
     nbvh++;
   }
 

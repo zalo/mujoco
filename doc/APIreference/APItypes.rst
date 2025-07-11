@@ -165,6 +165,17 @@ values are used in ``m->cam_mode`` and ``m->light_mode``.
 .. mujoco-include:: mjtCamLight
 
 
+.. _mjtLightType:
+
+mjtLightType
+~~~~~~~~~~~~
+
+The type of a light source describing how its position, orientation and other properties will interact with the
+objects in the scene. These values are used in ``m->light_type``.
+
+.. mujoco-include:: mjtLightType
+
+
 .. _mjtTexture:
 
 mjtTexture
@@ -184,6 +195,16 @@ Texture roles, specifying how the renderer should interpret the texture.  Note t
 uses RGB textures.  These values are used to store the texture index in the material's array ``m->mat_texid``.
 
 .. mujoco-include:: mjtTextureRole
+
+
+.. _mjtColorSpace:
+
+mjtColorSpace
+~~~~~~~~~~~~~
+
+Type of color space encoding for textures.
+
+.. mujoco-include:: mjtColorSpace
 
 
 .. _mjtIntegrator:
@@ -355,6 +376,26 @@ Types of frame alignment of elements with their parent bodies. Used as shortcuts
 last argument to :ref:`mj_local2global`.
 
 .. mujoco-include:: mjtSameFrame
+
+
+.. _mjtFlexSelf:
+
+mjtFlexSelf
+~~~~~~~~~~~~
+
+Types of flex self-collisions midphase.
+
+.. mujoco-include:: mjtFlexSelf
+
+
+.. _mjtSDFType:
+
+mjtSDFType
+~~~~~~~~~~~
+
+Formulas used to combine SDFs when calling mjc_distance and mjc_gradient.
+
+.. mujoco-include:: mjtSDFType
 
 
 .. _tyDataEnums:
@@ -883,7 +924,7 @@ mjSolverStat
 
 This is the data structure holding information about one solver iteration. ``mjData.solver`` is a preallocated array
 of mjSolverStat data structures, one for each iteration of the solver, up to a maximum of mjNSOLVER. The actual number
-of solver iterations is given by ``mjData.solver_iter``.
+of solver iterations is given by ``mjData.solver_niter``.
 
 .. mujoco-include:: mjSolverStat
 
@@ -965,17 +1006,6 @@ mjvScene
 This structure contains everything needed to render the 3D scene in OpenGL.
 
 .. mujoco-include:: mjvScene
-
-
-.. _mjvSceneState:
-
-mjvSceneState
-~~~~~~~~~~~~~
-
-This structure contains the portions of :ref:`mjModel` and :ref:`mjData` that are required for
-various ``mjv_*`` functions.
-
-.. mujoco-include:: mjvSceneState
 
 
 .. _mjvFigure:

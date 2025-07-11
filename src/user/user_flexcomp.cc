@@ -33,6 +33,7 @@
 #include "engine/engine_util_errmem.h"
 #include "user/user_flexcomp.h"
 #include <mujoco/mjspec.h>
+#include "user/user_api.h"
 #include "user/user_model.h"
 #include "user/user_objects.h"
 #include "user/user_resource.h"
@@ -107,7 +108,7 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
                  type == mjFCOMPTYPE_GMSH);
 
   // check parent body name
-  if (std::string(mjs_getString(body->name)).empty()) {
+  if (mjs_getName(body->element)->empty()) {
     return comperr(error, "Parent body must have name", error_sz);
   }
 
@@ -409,7 +410,7 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
 
   flex->model = model;
   flex->id = id;
-  mjs_setString(pf->name, name.c_str());
+  mjs_setName(pf->element, name.c_str());
   mjs_setInt(pf->elem, element.data(), element.size());
   mjs_setFloat(pf->texcoord, texcoord.data(), texcoord.size());
   mjs_setInt(pf->elemtexcoord, elemtexcoord.data(), elemtexcoord.size());
@@ -419,7 +420,7 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
 
   // rigid: set parent name, nothing else to do
   if (rigid) {
-    mjs_appendString(pf->vertbody, mjs_getString(body->name));
+    mjs_appendString(pf->vertbody, mjs_getName(body->element)->c_str());
     return true;
   }
 
@@ -442,7 +443,7 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
 
     // pinned or trilinear: parent body
     if (pinned[i] || doftype == mjFCOMPDOF_TRILINEAR) {
-      mjs_appendString(pf->vertbody, mjs_getString(body->name));
+      mjs_appendString(pf->vertbody, mjs_getName(body->element)->c_str());
 
       // add plugin
       if (plugin.active) {
@@ -458,6 +459,14 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
     else {
       // add new body at vertex coordinates
       mjsBody* pb = mjs_addBody(body, 0);
+
+      // add geom if vertcollide
+      if (dflex->vertcollide) {
+        mjsGeom* geom = mjs_addGeom(pb, 0);
+        geom->type = mjGEOM_SPHERE;
+        geom->size[0] = dflex->radius;
+        geom->group = 4;
+      }
 
       // set frame and inertial
       pb->pos[0] = point[3*i];
@@ -498,8 +507,8 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
       // construct body name, add to vertbody
       char txt[100];
       mju::sprintf_arr(txt, "%s_%d", name.c_str(), i);
-      mjs_setString(pb->name, txt);
-      mjs_appendString(pf->vertbody, mjs_getString(pb->name));
+      mjs_setName(pb->element, txt);
+      mjs_appendString(pf->vertbody, mjs_getName(pb->element)->c_str());
 
       // clear flex vertex coordinates if allocated
       if (!centered) {
@@ -529,7 +538,7 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
             node[3*(i*4+j*2+k)+0] = i == 0 ? minmax[0] : minmax[3];
             node[3*(i*4+j*2+k)+1] = j == 0 ? minmax[1] : minmax[4];
             node[3*(i*4+j*2+k)+2] = k == 0 ? minmax[2] : minmax[5];
-            mjs_appendString(pf->nodebody, mjs_getString(body->name));
+            mjs_appendString(pf->nodebody, mjs_getName(body->element)->c_str());
             continue;
           }
 
@@ -544,6 +553,13 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
           pb->inertia[2] = pb->mass*(2.0*inertiabox*inertiabox)/3.0;
           pb->explicitinertial = true;
 
+          // add geom if vertcollide
+          if (dflex->vertcollide) {
+            mjsGeom* geom = mjs_addGeom(pb, 0);
+            geom->type = mjGEOM_SPHERE;
+            geom->size[0] = dflex->radius;
+          }
+
           for (int d=0; d < 3; d++) {
             mjsJoint* jnt = mjs_addJoint(pb, 0);
             jnt->type = mjJNT_SLIDE;
@@ -555,8 +571,8 @@ bool mjCFlexcomp::Make(mjsBody* body, char* error, int error_sz) {
           // construct node name, add to nodebody
           char txt[100];
           mju::sprintf_arr(txt, "%s_%d_%d_%d", name.c_str(), i, j, k);
-          mjs_setString(pb->name, txt);
-          mjs_appendString(pf->nodebody, mjs_getString(pb->name));
+          mjs_setName(pb->element, txt);
+          mjs_appendString(pf->nodebody, mjs_getName(pb->element)->c_str());
         }
       }
     }
