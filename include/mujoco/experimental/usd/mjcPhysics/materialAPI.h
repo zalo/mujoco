@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MJCPHYSICS_GENERATED_SITEAPI_H
-#define MJCPHYSICS_GENERATED_SITEAPI_H
+#ifndef MJCPHYSICS_GENERATED_MATERIALAPI_H
+#define MJCPHYSICS_GENERATED_MATERIALAPI_H
 
-/// \file mjcPhysics/siteAPI.h
+/// \file mjcPhysics/materialAPI.h
 
 #include <mujoco/experimental/usd/mjcPhysics/api.h>
 #include <mujoco/experimental/usd/mjcPhysics/tokens.h>
@@ -35,36 +35,36 @@ PXR_NAMESPACE_OPEN_SCOPE
 class SdfAssetPath;
 
 // -------------------------------------------------------------------------- //
-// MJCSITEAPI                                                                 //
+// MJCMATERIALAPI                                                             //
 // -------------------------------------------------------------------------- //
 
-/// \class MjcPhysicsSiteAPI
+/// \class MjcPhysicsMaterialAPI
 ///
-/// API describing a MuJoCo site.
+/// API providing extension attributes to represent physicsl MuJoCo materials.
 ///
-class MjcPhysicsSiteAPI : public UsdAPISchemaBase {
+class MjcPhysicsMaterialAPI : public UsdAPISchemaBase {
  public:
   /// Compile time constant representing what kind of schema this class is.
   ///
   /// \sa UsdSchemaKind
   static const UsdSchemaKind schemaKind = UsdSchemaKind::SingleApplyAPI;
 
-  /// Construct a MjcPhysicsSiteAPI on UsdPrim \p prim .
-  /// Equivalent to MjcPhysicsSiteAPI::Get(prim.GetStage(), prim.GetPath())
+  /// Construct a MjcPhysicsMaterialAPI on UsdPrim \p prim .
+  /// Equivalent to MjcPhysicsMaterialAPI::Get(prim.GetStage(), prim.GetPath())
   /// for a \em valid \p prim, but will not immediately throw an error for
   /// an invalid \p prim
-  explicit MjcPhysicsSiteAPI(const UsdPrim &prim = UsdPrim())
+  explicit MjcPhysicsMaterialAPI(const UsdPrim &prim = UsdPrim())
       : UsdAPISchemaBase(prim) {}
 
-  /// Construct a MjcPhysicsSiteAPI on the prim held by \p schemaObj .
-  /// Should be preferred over MjcPhysicsSiteAPI(schemaObj.GetPrim()),
+  /// Construct a MjcPhysicsMaterialAPI on the prim held by \p schemaObj .
+  /// Should be preferred over MjcPhysicsMaterialAPI(schemaObj.GetPrim()),
   /// as it preserves SchemaBase state.
-  explicit MjcPhysicsSiteAPI(const UsdSchemaBase &schemaObj)
+  explicit MjcPhysicsMaterialAPI(const UsdSchemaBase &schemaObj)
       : UsdAPISchemaBase(schemaObj) {}
 
   /// Destructor.
   MJCPHYSICS_API
-  virtual ~MjcPhysicsSiteAPI();
+  virtual ~MjcPhysicsMaterialAPI();
 
   /// Return a vector of names of all pre-declared attributes for this schema
   /// class and all its ancestor classes.  Does not include attributes that
@@ -73,17 +73,18 @@ class MjcPhysicsSiteAPI : public UsdAPISchemaBase {
   static const TfTokenVector &GetSchemaAttributeNames(
       bool includeInherited = true);
 
-  /// Return a MjcPhysicsSiteAPI holding the prim adhering to this
+  /// Return a MjcPhysicsMaterialAPI holding the prim adhering to this
   /// schema at \p path on \p stage.  If no prim exists at \p path on
   /// \p stage, or if the prim at that path does not adhere to this schema,
   /// return an invalid schema object.  This is shorthand for the following:
   ///
   /// \code
-  /// MjcPhysicsSiteAPI(stage->GetPrimAtPath(path));
+  /// MjcPhysicsMaterialAPI(stage->GetPrimAtPath(path));
   /// \endcode
   ///
   MJCPHYSICS_API
-  static MjcPhysicsSiteAPI Get(const UsdStagePtr &stage, const SdfPath &path);
+  static MjcPhysicsMaterialAPI Get(const UsdStagePtr &stage,
+                                   const SdfPath &path);
 
   /// Returns true if this <b>single-apply</b> API schema can be applied to
   /// the given \p prim. If this schema can not be a applied to the prim,
@@ -105,11 +106,11 @@ class MjcPhysicsSiteAPI : public UsdAPISchemaBase {
   static bool CanApply(const UsdPrim &prim, std::string *whyNot = nullptr);
 
   /// Applies this <b>single-apply</b> API schema to the given \p prim.
-  /// This information is stored by adding "MjcSiteAPI" to the
+  /// This information is stored by adding "MjcMaterialAPI" to the
   /// token-valued, listOp metadata \em apiSchemas on the prim.
   ///
-  /// \return A valid MjcPhysicsSiteAPI object is returned upon success.
-  /// An invalid (or empty) MjcPhysicsSiteAPI object is returned upon
+  /// \return A valid MjcPhysicsMaterialAPI object is returned upon success.
+  /// An invalid (or empty) MjcPhysicsMaterialAPI object is returned upon
   /// failure. See \ref UsdPrim::ApplyAPI() for conditions
   /// resulting in failure.
   ///
@@ -120,7 +121,7 @@ class MjcPhysicsSiteAPI : public UsdAPISchemaBase {
   /// \sa UsdPrim::RemoveAPI()
   ///
   MJCPHYSICS_API
-  static MjcPhysicsSiteAPI Apply(const UsdPrim &prim);
+  static MjcPhysicsMaterialAPI Apply(const UsdPrim &prim);
 
  protected:
   /// Returns the kind of schema this class belongs to.
@@ -143,27 +144,53 @@ class MjcPhysicsSiteAPI : public UsdAPISchemaBase {
 
  public:
   // --------------------------------------------------------------------- //
-  // GROUP
+  // TORSIONALFRICTION
   // --------------------------------------------------------------------- //
-  /// Integer MuJoCo group to which the collider belongs.
+  /// Friction value acting around contact normal.
   ///
   /// | ||
   /// | -- | -- |
-  /// | Declaration | `uniform int mjc:group = 0` |
-  /// | C++ Type | int |
-  /// | \ref Usd_Datatypes "Usd Type" | SdfValueTypeNames->Int |
+  /// | Declaration | `uniform double mjc:torsionalfriction = 0.005` |
+  /// | C++ Type | double |
+  /// | \ref Usd_Datatypes "Usd Type" | SdfValueTypeNames->Double |
   /// | \ref SdfVariability "Variability" | SdfVariabilityUniform |
   MJCPHYSICS_API
-  UsdAttribute GetGroupAttr() const;
+  UsdAttribute GetTorsionalFrictionAttr() const;
 
-  /// See GetGroupAttr(), and also
+  /// See GetTorsionalFrictionAttr(), and also
   /// \ref Usd_Create_Or_Get_Property for when to use Get vs Create.
   /// If specified, author \p defaultValue as the attribute's default,
   /// sparsely (when it makes sense to do so) if \p writeSparsely is \c true -
   /// the default for \p writeSparsely is \c false.
   MJCPHYSICS_API
-  UsdAttribute CreateGroupAttr(VtValue const &defaultValue = VtValue(),
-                               bool writeSparsely = false) const;
+  UsdAttribute CreateTorsionalFrictionAttr(
+      VtValue const &defaultValue = VtValue(),
+      bool writeSparsely = false) const;
+
+ public:
+  // --------------------------------------------------------------------- //
+  // ROLLINGFRICTION
+  // --------------------------------------------------------------------- //
+  /// Friction value acting around both axes on the contact tangent plane.
+  ///
+  /// | ||
+  /// | -- | -- |
+  /// | Declaration | `uniform double mjc:rollingfriction = 0.0001` |
+  /// | C++ Type | double |
+  /// | \ref Usd_Datatypes "Usd Type" | SdfValueTypeNames->Double |
+  /// | \ref SdfVariability "Variability" | SdfVariabilityUniform |
+  MJCPHYSICS_API
+  UsdAttribute GetRollingFrictionAttr() const;
+
+  /// See GetRollingFrictionAttr(), and also
+  /// \ref Usd_Create_Or_Get_Property for when to use Get vs Create.
+  /// If specified, author \p defaultValue as the attribute's default,
+  /// sparsely (when it makes sense to do so) if \p writeSparsely is \c true -
+  /// the default for \p writeSparsely is \c false.
+  MJCPHYSICS_API
+  UsdAttribute CreateRollingFrictionAttr(
+      VtValue const &defaultValue = VtValue(),
+      bool writeSparsely = false) const;
 
  public:
   // ===================================================================== //

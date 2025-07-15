@@ -55,15 +55,15 @@ struct MjcPhysicsTokensType {
   MJCPHYSICS_API MjcPhysicsTokensType();
   /// \brief "affine"
   ///
-  /// Possible value for MjcPhysicsTransmission::GetMjcBiasTypeAttr(), Possible
-  /// value for MjcPhysicsTransmission::GetMjcGainTypeAttr()
+  /// Possible value for MjcPhysicsActuator::GetMjcBiasTypeAttr(), Possible
+  /// value for MjcPhysicsActuator::GetMjcGainTypeAttr()
   const TfToken affine;
   /// \brief "auto"
   ///
   /// Fallback value for MjcPhysicsSceneAPI::GetJacobianAttr(), Fallback value
-  /// for MjcPhysicsTransmission::GetMjcActLimitedAttr(), Fallback value for
-  /// MjcPhysicsTransmission::GetMjcCtrlLimitedAttr(), Fallback value for
-  /// MjcPhysicsTransmission::GetMjcForceLimitedAttr(), Fallback value for
+  /// for MjcPhysicsActuator::GetMjcActLimitedAttr(), Fallback value for
+  /// MjcPhysicsActuator::GetMjcCtrlLimitedAttr(), Fallback value for
+  /// MjcPhysicsActuator::GetMjcForceLimitedAttr(), Fallback value for
   /// MjcPhysicsJointAPI::GetMjcActuatorfrclimitedAttr(),  This token represents
   /// the auto constraint Jacobian and matrices computed from it.
   const TfToken auto_;
@@ -97,22 +97,22 @@ struct MjcPhysicsTokensType {
   const TfToken exact;
   /// \brief "false"
   ///
-  /// Possible value for MjcPhysicsTransmission::GetMjcActLimitedAttr(),
-  /// Possible value for MjcPhysicsTransmission::GetMjcCtrlLimitedAttr(),
-  /// Possible value for MjcPhysicsTransmission::GetMjcForceLimitedAttr(),
-  /// Possible value for MjcPhysicsJointAPI::GetMjcActuatorfrclimitedAttr()
+  /// Possible value for MjcPhysicsActuator::GetMjcActLimitedAttr(), Possible
+  /// value for MjcPhysicsActuator::GetMjcCtrlLimitedAttr(), Possible value for
+  /// MjcPhysicsActuator::GetMjcForceLimitedAttr(), Possible value for
+  /// MjcPhysicsJointAPI::GetMjcActuatorfrclimitedAttr()
   const TfToken false_;
   /// \brief "filter"
   ///
-  /// Possible value for MjcPhysicsTransmission::GetMjcDynTypeAttr()
+  /// Possible value for MjcPhysicsActuator::GetMjcDynTypeAttr()
   const TfToken filter;
   /// \brief "filterexact"
   ///
-  /// Possible value for MjcPhysicsTransmission::GetMjcDynTypeAttr()
+  /// Possible value for MjcPhysicsActuator::GetMjcDynTypeAttr()
   const TfToken filterexact;
   /// \brief "fixed"
   ///
-  /// Fallback value for MjcPhysicsTransmission::GetMjcGainTypeAttr()
+  /// Fallback value for MjcPhysicsActuator::GetMjcGainTypeAttr()
   const TfToken fixed;
   /// \brief "implicit"
   ///
@@ -126,7 +126,7 @@ struct MjcPhysicsTokensType {
   const TfToken implicitfast;
   /// \brief "integrator"
   ///
-  /// Possible value for MjcPhysicsTransmission::GetMjcDynTypeAttr()
+  /// Possible value for MjcPhysicsActuator::GetMjcDynTypeAttr()
   const TfToken integrator;
   /// \brief "legacy"
   ///
@@ -138,23 +138,23 @@ struct MjcPhysicsTokensType {
   const TfToken mjcAct;
   /// \brief "mjc:actDim"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcActDim;
   /// \brief "mjc:actEarly"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcActEarly;
   /// \brief "mjc:actLimited"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcActLimited;
   /// \brief "mjc:actRange:max"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcActRangeMax;
   /// \brief "mjc:actRange:min"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcActRangeMin;
   /// \brief "mjc:actuatorfrclimited"
   ///
@@ -178,15 +178,19 @@ struct MjcPhysicsTokensType {
   const TfToken mjcArmature;
   /// \brief "mjc:biasPrm"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcBiasPrm;
   /// \brief "mjc:biasType"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcBiasType;
+  /// \brief "mjc:condim"
+  ///
+  /// MjcPhysicsCollisionAPI
+  const TfToken mjcCondim;
   /// \brief "mjc:crankLength"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcCrankLength;
   /// \brief "mjc:ctrl"
   ///
@@ -194,15 +198,15 @@ struct MjcPhysicsTokensType {
   const TfToken mjcCtrl;
   /// \brief "mjc:ctrlLimited"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcCtrlLimited;
   /// \brief "mjc:ctrlRange:max"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcCtrlRangeMax;
   /// \brief "mjc:ctrlRange:min"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcCtrlRangeMin;
   /// \brief "mjc:damping"
   ///
@@ -210,11 +214,11 @@ struct MjcPhysicsTokensType {
   const TfToken mjcDamping;
   /// \brief "mjc:dynPrm"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcDynPrm;
   /// \brief "mjc:dynType"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcDynType;
   /// \brief "mjc:flag:actuation"
   ///
@@ -310,15 +314,15 @@ struct MjcPhysicsTokensType {
   const TfToken mjcFlagWarmstart;
   /// \brief "mjc:forceLimited"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcForceLimited;
   /// \brief "mjc:forceRange:max"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcForceRangeMax;
   /// \brief "mjc:forceRange:min"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcForceRangeMin;
   /// \brief "mjc:frictionloss"
   ///
@@ -326,39 +330,48 @@ struct MjcPhysicsTokensType {
   const TfToken mjcFrictionloss;
   /// \brief "mjc:gainPrm"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcGainPrm;
   /// \brief "mjc:gainType"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcGainType;
+  /// \brief "mjc:gap"
+  ///
+  /// MjcPhysicsCollisionAPI
+  const TfToken mjcGap;
   /// \brief "mjc:gear"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcGear;
   /// \brief "mjc:group"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsSiteAPI, MjcPhysicsCollisionAPI, MjcPhysicsActuator,
+  /// MjcPhysicsJointAPI
   const TfToken mjcGroup;
   /// \brief "mjc:inertia"
   ///
   /// MjcPhysicsMeshCollisionAPI
   const TfToken mjcInertia;
+  /// \brief "mjc:inheritRange"
+  ///
+  /// MjcPhysicsActuator
+  const TfToken mjcInheritRange;
   /// \brief "mjc:jointInParent"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcJointInParent;
   /// \brief "mjc:lengthRange:max"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcLengthRangeMax;
   /// \brief "mjc:lengthRange:min"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcLengthRangeMin;
   /// \brief "mjc:margin"
   ///
-  /// MjcPhysicsJointAPI
+  /// MjcPhysicsCollisionAPI, MjcPhysicsJointAPI
   const TfToken mjcMargin;
   /// \brief "mjc:maxhullvert"
   ///
@@ -476,6 +489,10 @@ struct MjcPhysicsTokensType {
   ///
   /// MjcPhysicsSceneAPI
   const TfToken mjcOptionWind;
+  /// \brief "mjc:priority"
+  ///
+  /// MjcPhysicsCollisionAPI
+  const TfToken mjcPriority;
   /// \brief "mjc:qpos"
   ///
   /// MjcPhysicsKeyframe
@@ -490,16 +507,24 @@ struct MjcPhysicsTokensType {
   const TfToken mjcRef;
   /// \brief "mjc:refSite"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcRefSite;
+  /// \brief "mjc:rollingfriction"
+  ///
+  /// MjcPhysicsMaterialAPI
+  const TfToken mjcRollingfriction;
   /// \brief "mjc:shellinertia"
   ///
   /// MjcPhysicsCollisionAPI
   const TfToken mjcShellinertia;
   /// \brief "mjc:sliderSite"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcSliderSite;
+  /// \brief "mjc:solimp"
+  ///
+  /// MjcPhysicsCollisionAPI
+  const TfToken mjcSolimp;
   /// \brief "mjc:solimpfriction"
   ///
   /// MjcPhysicsJointAPI
@@ -508,6 +533,14 @@ struct MjcPhysicsTokensType {
   ///
   /// MjcPhysicsJointAPI
   const TfToken mjcSolimplimit;
+  /// \brief "mjc:solmix"
+  ///
+  /// MjcPhysicsCollisionAPI
+  const TfToken mjcSolmix;
+  /// \brief "mjc:solref"
+  ///
+  /// MjcPhysicsCollisionAPI
+  const TfToken mjcSolref;
   /// \brief "mjc:solreffriction"
   ///
   /// MjcPhysicsJointAPI
@@ -530,13 +563,17 @@ struct MjcPhysicsTokensType {
   const TfToken mjcStiffness;
   /// \brief "mjc:target"
   ///
-  /// MjcPhysicsTransmission
+  /// MjcPhysicsActuator
   const TfToken mjcTarget;
+  /// \brief "mjc:torsionalfriction"
+  ///
+  /// MjcPhysicsMaterialAPI
+  const TfToken mjcTorsionalfriction;
   /// \brief "muscle"
   ///
-  /// Possible value for MjcPhysicsTransmission::GetMjcBiasTypeAttr(), Possible
-  /// value for MjcPhysicsTransmission::GetMjcDynTypeAttr(), Possible value for
-  /// MjcPhysicsTransmission::GetMjcGainTypeAttr()
+  /// Possible value for MjcPhysicsActuator::GetMjcBiasTypeAttr(), Possible
+  /// value for MjcPhysicsActuator::GetMjcDynTypeAttr(), Possible value for
+  /// MjcPhysicsActuator::GetMjcGainTypeAttr()
   const TfToken muscle;
   /// \brief "newton"
   ///
@@ -545,8 +582,8 @@ struct MjcPhysicsTokensType {
   const TfToken newton;
   /// \brief "none"
   ///
-  /// Fallback value for MjcPhysicsTransmission::GetMjcBiasTypeAttr(), Fallback
-  /// value for MjcPhysicsTransmission::GetMjcDynTypeAttr()
+  /// Fallback value for MjcPhysicsActuator::GetMjcBiasTypeAttr(), Fallback
+  /// value for MjcPhysicsActuator::GetMjcDynTypeAttr()
   const TfToken none;
   /// \brief "pgs"
   ///
@@ -574,17 +611,21 @@ struct MjcPhysicsTokensType {
   const TfToken sparse;
   /// \brief "true"
   ///
-  /// Possible value for MjcPhysicsTransmission::GetMjcActLimitedAttr(),
-  /// Possible value for MjcPhysicsTransmission::GetMjcCtrlLimitedAttr(),
-  /// Possible value for MjcPhysicsTransmission::GetMjcForceLimitedAttr(),
-  /// Possible value for MjcPhysicsJointAPI::GetMjcActuatorfrclimitedAttr()
+  /// Possible value for MjcPhysicsActuator::GetMjcActLimitedAttr(), Possible
+  /// value for MjcPhysicsActuator::GetMjcCtrlLimitedAttr(), Possible value for
+  /// MjcPhysicsActuator::GetMjcForceLimitedAttr(), Possible value for
+  /// MjcPhysicsJointAPI::GetMjcActuatorfrclimitedAttr()
   const TfToken true_;
   /// \brief "user"
   ///
-  /// Possible value for MjcPhysicsTransmission::GetMjcBiasTypeAttr(), Possible
-  /// value for MjcPhysicsTransmission::GetMjcDynTypeAttr(), Possible value for
-  /// MjcPhysicsTransmission::GetMjcGainTypeAttr()
+  /// Possible value for MjcPhysicsActuator::GetMjcBiasTypeAttr(), Possible
+  /// value for MjcPhysicsActuator::GetMjcDynTypeAttr(), Possible value for
+  /// MjcPhysicsActuator::GetMjcGainTypeAttr()
   const TfToken user;
+  /// \brief "MjcActuator"
+  ///
+  /// Schema identifier and family for MjcPhysicsActuator
+  const TfToken MjcActuator;
   /// \brief "MjcCollisionAPI"
   ///
   /// Schema identifier and family for MjcPhysicsCollisionAPI
@@ -597,6 +638,10 @@ struct MjcPhysicsTokensType {
   ///
   /// Schema identifier and family for MjcPhysicsKeyframe
   const TfToken MjcKeyframe;
+  /// \brief "MjcMaterialAPI"
+  ///
+  /// Schema identifier and family for MjcPhysicsMaterialAPI
+  const TfToken MjcMaterialAPI;
   /// \brief "MjcMeshCollisionAPI"
   ///
   /// Schema identifier and family for MjcPhysicsMeshCollisionAPI
@@ -609,10 +654,6 @@ struct MjcPhysicsTokensType {
   ///
   /// Schema identifier and family for MjcPhysicsSiteAPI
   const TfToken MjcSiteAPI;
-  /// \brief "MjcTransmission"
-  ///
-  /// Schema identifier and family for MjcPhysicsTransmission
-  const TfToken MjcTransmission;
   /// A vector of all of the tokens listed above.
   const std::vector<TfToken> allTokens;
 };

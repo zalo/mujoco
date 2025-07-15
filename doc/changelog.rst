@@ -9,8 +9,27 @@ General
 ^^^^^^^
 - Added the :ref:`insidesite<sensor-insidesite>` sensor, for checking if an object is inside the volume of a site.
   It is useful for triggering events in surrounding environment logic.
+- Added the :ref:`contact<sensor-contact>` sensor, for reporting contact information according to user-defined criteria.
+  The purpose of the :el:`contact` sensor is to report contact-related information in a fixed-size array. This is useful
+  as input to learning-based agents and in environment logic.
 - Removed the SdfLib plugin and the dependency on `SdfLib <https://github.com/UPC-ViRVIG/SdfLib>`__. SDFs are now
   supported natively in mjModel.
+- Removed ``oct_depth`` from :ref:`mjvOption` (unused).
+- Inertia computation in MuJoCo C is now performed by a new :ref:`pipeline<piStages>` function :ref:`mj_makeM`, which
+  combines the Composite Rigid Body algorithm in :ref:`mj_crb` and additional terms related to
+  :ref:`tendon armature<tendon-spatial-armature>`. Code that uses :ref:`mj_crb` to compute the inertia should now use
+  :ref:`mj_makeM` instead.
+
+.. admonition:: Breaking API changes
+   :class: attention
+
+   - Removed the ``mjVIS_FLEXBVH`` enum value, its functionality is now provided by :ref:`mjVIS_MESHBVH<mjtVisFlag>`.
+
+Bug fixes
+^^^^^^^^^
+- Fixed a bug that caused object lists in the child to have missing elements after attaching an mjSpec. This was caused
+  by adding to the lists only the objects that belong to the tree of the requested body, but this causes to skip objects
+  that were attached, since they belong to the tree of the parent.
 
 Version 3.3.4 (July 8, 2025)
 ----------------------------

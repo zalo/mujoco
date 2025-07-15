@@ -4,7 +4,7 @@
 )
 
 class "MjcSceneAPI" (
-    doc = "API providing global simulation options for Mujoco."
+    doc = "API providing global simulation options for MuJoCo."
 )
 {
     uniform bool mjc:flag:actuation = 1 (
@@ -221,23 +221,59 @@ class "MjcSceneAPI" (
 }
 
 class "MjcSiteAPI" (
-    doc = "API describing a Mujoco site."
+    doc = "API describing a MuJoCo site."
 )
 {
+    uniform int mjc:group = 0 (
+        displayName = "Group"
+        doc = "Integer MuJoCo group to which the collider belongs."
+    )
 }
 
 class "MjcCollisionAPI" (
-    doc = "API describing a Mujoco collider."
+    doc = "API describing a MuJoCo collider."
 )
 {
+    uniform int mjc:condim = 3 (
+        displayName = "ConDim"
+        doc = "The dimensionality of the contact space for a dynamically generated contact pair is set to the maximum of the condim values of the two participating geoms."
+    )
+    uniform double mjc:gap = 0 (
+        displayName = "Gap"
+        doc = "This attribute is used to enable the generation of inactive contacts, i.e., contacts that are ignored by the constraint solver but are included in mjData.contact for the purpose of custom computations. When this value is positive, geom distances between margin and margin-gap correspond to such inactive contacts."
+    )
+    uniform int mjc:group = 0 (
+        displayName = "Group"
+        doc = "Integer MuJoCo group to which the collider belongs."
+    )
+    uniform double mjc:margin = 0 (
+        displayName = "Margin"
+        doc = "Distance threshold below which contacts are detected and included in the global array mjData.contact."
+    )
+    uniform int mjc:priority = 0 (
+        displayName = "Priority"
+        doc = "Priority determining how the properties of two colliders are combined to form the properties of the contact."
+    )
     uniform bool mjc:shellinertia = 0 (
         displayName = "Shell Inertia"
         doc = "Enables handling of the inertia assuming mass is concentrated on the surface."
     )
+    uniform double[] mjc:solimp = [0.9, 0.95, 0.001, 0.5, 2] (
+        displayName = "SolImp"
+        doc = "Specifies the weight used for averaging of contact parameters, and interacts with the priority attribute."
+    )
+    uniform double mjc:solmix = 1 (
+        displayName = "SolMix"
+        doc = "Specifies the weight used for averaging of contact parameters, and interacts with the priority attribute."
+    )
+    uniform double[] mjc:solref = [0.02, 1] (
+        displayName = "SolMix"
+        doc = "Specifies the weight used for averaging of contact parameters, and interacts with the priority attribute."
+    )
 }
 
 class "MjcMeshCollisionAPI" (
-    doc = "API describing a Mujoco mesh collider."
+    doc = "API describing a MuJoCo mesh collider."
 )
 {
     uniform token mjc:inertia = "legacy" (
@@ -251,7 +287,7 @@ class "MjcMeshCollisionAPI" (
     )
 }
 
-class MjcTransmission "MjcTransmission" (
+class MjcActuator "MjcActuator" (
     doc = "Known as actuator in MuJoCo, this prim represents force transmission to joints, bodies, or sites."
 )
 {
@@ -318,6 +354,13 @@ class MjcTransmission "MjcTransmission" (
     uniform double[] mjc:gear = [1, 0, 0, 0, 0, 0] (
         doc = "This attribute scales the length (and consequently moment arms, velocity and force) of the actuator, for all transmission types. It is different from the gain in the force generation mechanism, because the gain only scales the force output and does not affect the length, moment arms and velocity. For actuators with scalar transmission, only the first element of this vector is used. The remaining elements are needed for joint, jointinparent and site transmissions where this attribute is used to specify 3D force and torque axes."
     )
+    uniform int mjc:group = 0 (
+        displayName = "Group"
+        doc = "Integer MuJoCo group to which the transmission belongs."
+    )
+    uniform double mjc:inheritRange = 0 (
+        doc = "Automatically set the actuator’s ctrlrange to match the transmission target’s range. The default value means disabled. A positive value X sets the ctrlrange around the midpoint of the target range, scaled by X. For example if the target joint has range of [0, 1], then a value of 1.0 will set ctrlrange to [0, 1]; values of 0.8 and 1.2 will set the ctrlrange to [0.1, 0.9] and [-0.1, 1.1], respectively. Values smaller than 1 are useful for not hitting the limits; values larger than 1 are useful for maintaining control authority at the limits (being able to push on them). This attribute is exclusive with ctrlrange and available only for joint and tendon transmissions which have range defined."
+    )
     uniform bool mjc:jointInParent = 0 (
         doc = "If true and applied to ball and free joints, the 3d rotation axis given by gear is defined in the parent frame (which is the world frame for free joints) rather than the child frame."
     )
@@ -363,7 +406,7 @@ class MjcKeyframe "MjcKeyframe" (
 }
 
 class "MjcJointAPI" (
-    doc = "API describing a Mujoco joint."
+    doc = "API describing a MuJoCo joint."
 )
 {
     uniform token mjc:actuatorfrclimited = "auto" (
@@ -387,6 +430,10 @@ class "MjcJointAPI" (
     )
     uniform double mjc:frictionloss = 0 (
         doc = "Friction loss due to dry friction. This value is the same for all degrees of freedom created by this joint. Semantically friction loss does not make sense for free joints, but the compiler allows it. To enable friction loss, set this attribute to a positive value."
+    )
+    uniform int mjc:group = 0 (
+        displayName = "Group"
+        doc = "Integer MuJoCo group to which the joint belongs."
     )
     uniform double mjc:margin = 0 (
         doc = "The distance threshold below which limits become active. Recall that the Constraint solver normally generates forces as soon as a constraint becomes active, even if the margin parameter makes that happen at a distance. This attribute together with solreflimit and solimplimit can be used to model a soft joint limit."
@@ -414,6 +461,20 @@ class "MjcJointAPI" (
     )
     uniform double mjc:stiffness = 0 (
         doc = "Joint stiffness. If this value is positive, a spring will be created with equilibrium position given by springref below. The spring force is computed along with the other passive forces."
+    )
+}
+
+class "MjcMaterialAPI" (
+    doc = "API providing extension attributes to represent physicsl MuJoCo materials."
+)
+{
+    uniform double mjc:rollingfriction = 0.0001 (
+        displayName = "Rolling Friction"
+        doc = "Friction value acting around both axes on the contact tangent plane."
+    )
+    uniform double mjc:torsionalfriction = 0.005 (
+        displayName = "Torsional Friction"
+        doc = "Friction value acting around contact normal."
     )
 }
 

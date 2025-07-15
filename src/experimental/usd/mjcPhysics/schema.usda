@@ -98,7 +98,7 @@ class "MjcSceneAPI"
     customData = {
         string className = "SceneAPI"
     }
-    doc = """API providing global simulation options for Mujoco."""
+    doc = """API providing global simulation options for MuJoCo."""
 
     inherits = </APISchemaBase>
 )
@@ -516,28 +516,100 @@ class "MjcSiteAPI"
     customData = {
         string className = "SiteAPI"
     }
-    doc = """API describing a Mujoco site."""
+    doc = """API describing a MuJoCo site."""
 
     inherits = </APISchemaBase>
 )
-{}
+{
+    uniform int mjc:group = 0 (
+      customData = {
+          string apiName = "Group"
+      }
+      displayName = "Group"
+      doc = """Integer MuJoCo group to which the collider belongs."""
+    )
+}
 
 class "MjcCollisionAPI"
 (
     customData = {
         string className = "CollisionAPI"
     }
-    doc = """API describing a Mujoco collider."""
+    doc = """API describing a MuJoCo collider."""
 
     inherits = </APISchemaBase>
 )
 {
+    uniform int mjc:group = 0 (
+      customData = {
+          string apiName = "Group"
+      }
+      displayName = "Group"
+      doc = """Integer MuJoCo group to which the collider belongs."""
+    )
+
     uniform bool mjc:shellinertia = False (
         customData = {
             string apiName = "ShellInertia"
         }
         displayName = "Shell Inertia"
         doc = """Enables handling of the inertia assuming mass is concentrated on the surface."""
+    )
+
+    uniform int mjc:priority = 0 (
+      customData = {
+          string apiName = "Priority"
+      }
+      displayName = "Priority"
+      doc = """Priority determining how the properties of two colliders are combined to form the properties of the contact."""
+    )
+
+    uniform int mjc:condim = 3 (
+      customData = {
+          string apiName = "ConDim"
+      }
+      displayName = "ConDim"
+      doc = """The dimensionality of the contact space for a dynamically generated contact pair is set to the maximum of the condim values of the two participating geoms."""
+    )
+
+    uniform double mjc:solmix = 1.0 (
+      customData = {
+          string apiName = "SolMix"
+      }
+      displayName = "SolMix"
+      doc = """Specifies the weight used for averaging of contact parameters, and interacts with the priority attribute."""
+    )
+
+    uniform double[] mjc:solref = [0.02, 1.0] (
+      customData = {
+          string apiName = "SolRef"
+      }
+      displayName = "SolMix"
+      doc = """Specifies the weight used for averaging of contact parameters, and interacts with the priority attribute."""
+    )
+
+    uniform double[] mjc:solimp = [0.9, 0.95, 0.001, 0.5, 2.0] (
+      customData = {
+          string apiName = "SolImp"
+      }
+      displayName = "SolImp"
+      doc = """Specifies the weight used for averaging of contact parameters, and interacts with the priority attribute."""
+    )
+
+    uniform double mjc:margin = 0.0 (
+      customData = {
+          string apiName = "Margin"
+      }
+      displayName = "Margin"
+      doc = """Distance threshold below which contacts are detected and included in the global array mjData.contact."""
+    )
+
+    uniform double mjc:gap = 0.0 (
+      customData = {
+          string apiName = "Gap"
+      }
+      displayName = "Gap"
+      doc = """This attribute is used to enable the generation of inactive contacts, i.e., contacts that are ignored by the constraint solver but are included in mjData.contact for the purpose of custom computations. When this value is positive, geom distances between margin and margin-gap correspond to such inactive contacts."""
     )
 }
 
@@ -546,7 +618,7 @@ class "MjcMeshCollisionAPI"
     customData = {
         string className = "MeshCollisionAPI"
     }
-    doc = """API describing a Mujoco mesh collider."""
+    doc = """API describing a MuJoCo mesh collider."""
 
     inherits = </APISchemaBase>
 )
@@ -569,16 +641,24 @@ class "MjcMeshCollisionAPI"
     )
 }
 
-class MjcTransmission "MjcTransmission"
+class MjcActuator "MjcActuator"
 (
     customData = {
-        string className = "Transmission"
+        string className = "Actuator"
     }
     doc = """Known as actuator in MuJoCo, this prim represents force transmission to joints, bodies, or sites."""
 
     inherits = </Typed>
 )
 {
+    uniform int mjc:group = 0 (
+      customData = {
+          string apiName = "Group"
+      }
+      displayName = "Group"
+      doc = """Integer MuJoCo group to which the transmission belongs."""
+    )
+
     rel mjc:target (
         doc = "Actuator transmission target."
     )
@@ -588,10 +668,12 @@ class MjcTransmission "MjcTransmission"
         doc = "If true, the control input to this actuator is automatically clamped to ctrlrange at runtime. If false, control input clamping is disabled. If 'auto' and autolimits is set in compiler, control clamping will automatically be set to true if ctrlrange is defined without explicitly setting this attribute to 'true'. Note that control input clamping can also be globally disabled with the clampctrl attribute of option/flag."
         allowedTokens = ["false", "true", "auto"]
     )
+
     uniform token mjc:forceLimited = "auto" (
         doc = "If true, the force output of this actuator is automatically clamped to forcerange at runtime. If false, force clamping is disabled. If 'auto' and autolimits is set in compiler, force clamping will automatically be set to true if forcerange is defined without explicitly setting this attribute to 'true'."
         allowedTokens = ["false", "true", "auto"]
     )
+
     uniform token mjc:actLimited = "auto" (
         doc = "If true, the internal state (activation) associated with this actuator is automatically clamped to actrange at runtime. If false, activation clamping is disabled. If 'auto' and autolimits is set in compiler, activation clamping will automatically be set to true if actrange is defined without explicitly setting this attribute to 'true'. See the Activation clamping section for more details."
         allowedTokens = ["false", "true", "auto"]
@@ -685,6 +767,10 @@ class MjcTransmission "MjcTransmission"
     uniform bool mjc:actEarly = False (
         doc = "If true, force computation will use the next value of the activation variable rather than the current one. Setting this flag reduces the delay between the control and accelerations by one time-step."
     )
+
+    uniform double mjc:inheritRange = 0 (
+        doc = "Automatically set the actuator’s ctrlrange to match the transmission target’s range. The default value means disabled. A positive value X sets the ctrlrange around the midpoint of the target range, scaled by X. For example if the target joint has range of [0, 1], then a value of 1.0 will set ctrlrange to [0, 1]; values of 0.8 and 1.2 will set the ctrlrange to [0.1, 0.9] and [-0.1, 1.1], respectively. Values smaller than 1 are useful for not hitting the limits; values larger than 1 are useful for maintaining control authority at the limits (being able to push on them). This attribute is exclusive with ctrlrange and available only for joint and tendon transmissions which have range defined."
+    )
 }
 
 
@@ -728,11 +814,19 @@ class "MjcJointAPI"
     customData = {
         string className = "JointAPI"
     }
-    doc = """API describing a Mujoco joint."""
+    doc = """API describing a MuJoCo joint."""
 
     inherits = </APISchemaBase>
 )
 {
+    uniform int mjc:group = 0 (
+      customData = {
+          string apiName = "Group"
+      }
+      displayName = "Group"
+      doc = """Integer MuJoCo group to which the joint belongs."""
+    )
+
     uniform double[] mjc:springdamper = [0, 0] (
         doc = "When both numbers are positive, the compiler will override any stiffness and damping values specified with the attributes below, and will instead set them automatically so that the resulting mass-spring-damper for this joint has the desired time constant (first value) and damping ratio (second value). This is done by taking into account the joint inertia in the model reference configuration. Note that the format is the same as the solref parameter of the constraint solver."
     )
@@ -796,5 +890,32 @@ class "MjcJointAPI"
 
     uniform double mjc:frictionloss = 0 (
         doc = "Friction loss due to dry friction. This value is the same for all degrees of freedom created by this joint. Semantically friction loss does not make sense for free joints, but the compiler allows it. To enable friction loss, set this attribute to a positive value."
+    )
+}
+
+class "MjcMaterialAPI"
+(
+    customData = {
+        string className = "MaterialAPI"
+    }
+    doc = """API providing extension attributes to represent physicsl MuJoCo materials."""
+
+    inherits = </APISchemaBase>
+)
+{
+    uniform double mjc:torsionalfriction = 0.005 (
+        customData = {
+            string apiName = "TorsionalFriction"
+        }
+        displayName = "Torsional Friction"
+        doc = """Friction value acting around contact normal."""
+    )
+
+    uniform double mjc:rollingfriction = 0.0001 (
+        customData = {
+            string apiName = "RollingFriction"
+        }
+        displayName = "Rolling Friction"
+        doc = """Friction value acting around both axes on the contact tangent plane."""
     )
 }

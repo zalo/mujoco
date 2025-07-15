@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <mujoco/experimental/usd/mjcPhysics/siteAPI.h>
+#include <mujoco/experimental/usd/mjcPhysics/materialAPI.h>
 
 #include <pxr/usd/sdf/assetPath.h>
 #include <pxr/usd/sdf/types.h>
@@ -23,65 +23,76 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 // Register the schema with the TfType system.
 TF_REGISTRY_FUNCTION(TfType) {
-  TfType::Define<MjcPhysicsSiteAPI, TfType::Bases<UsdAPISchemaBase> >();
+  TfType::Define<MjcPhysicsMaterialAPI, TfType::Bases<UsdAPISchemaBase> >();
 }
 
 /* virtual */
-MjcPhysicsSiteAPI::~MjcPhysicsSiteAPI() {}
+MjcPhysicsMaterialAPI::~MjcPhysicsMaterialAPI() {}
 
 /* static */
-MjcPhysicsSiteAPI MjcPhysicsSiteAPI::Get(const UsdStagePtr &stage,
-                                         const SdfPath &path) {
+MjcPhysicsMaterialAPI MjcPhysicsMaterialAPI::Get(const UsdStagePtr &stage,
+                                                 const SdfPath &path) {
   if (!stage) {
     TF_CODING_ERROR("Invalid stage");
-    return MjcPhysicsSiteAPI();
+    return MjcPhysicsMaterialAPI();
   }
-  return MjcPhysicsSiteAPI(stage->GetPrimAtPath(path));
+  return MjcPhysicsMaterialAPI(stage->GetPrimAtPath(path));
 }
 
 /* virtual */
-UsdSchemaKind MjcPhysicsSiteAPI::_GetSchemaKind() const {
-  return MjcPhysicsSiteAPI::schemaKind;
+UsdSchemaKind MjcPhysicsMaterialAPI::_GetSchemaKind() const {
+  return MjcPhysicsMaterialAPI::schemaKind;
 }
 
 /* static */
-bool MjcPhysicsSiteAPI::CanApply(const UsdPrim &prim, std::string *whyNot) {
-  return prim.CanApplyAPI<MjcPhysicsSiteAPI>(whyNot);
+bool MjcPhysicsMaterialAPI::CanApply(const UsdPrim &prim, std::string *whyNot) {
+  return prim.CanApplyAPI<MjcPhysicsMaterialAPI>(whyNot);
 }
 
 /* static */
-MjcPhysicsSiteAPI MjcPhysicsSiteAPI::Apply(const UsdPrim &prim) {
-  if (prim.ApplyAPI<MjcPhysicsSiteAPI>()) {
-    return MjcPhysicsSiteAPI(prim);
+MjcPhysicsMaterialAPI MjcPhysicsMaterialAPI::Apply(const UsdPrim &prim) {
+  if (prim.ApplyAPI<MjcPhysicsMaterialAPI>()) {
+    return MjcPhysicsMaterialAPI(prim);
   }
-  return MjcPhysicsSiteAPI();
+  return MjcPhysicsMaterialAPI();
 }
 
 /* static */
-const TfType &MjcPhysicsSiteAPI::_GetStaticTfType() {
-  static TfType tfType = TfType::Find<MjcPhysicsSiteAPI>();
+const TfType &MjcPhysicsMaterialAPI::_GetStaticTfType() {
+  static TfType tfType = TfType::Find<MjcPhysicsMaterialAPI>();
   return tfType;
 }
 
 /* static */
-bool MjcPhysicsSiteAPI::_IsTypedSchema() {
+bool MjcPhysicsMaterialAPI::_IsTypedSchema() {
   static bool isTyped = _GetStaticTfType().IsA<UsdTyped>();
   return isTyped;
 }
 
 /* virtual */
-const TfType &MjcPhysicsSiteAPI::_GetTfType() const {
+const TfType &MjcPhysicsMaterialAPI::_GetTfType() const {
   return _GetStaticTfType();
 }
 
-UsdAttribute MjcPhysicsSiteAPI::GetGroupAttr() const {
-  return GetPrim().GetAttribute(MjcPhysicsTokens->mjcGroup);
+UsdAttribute MjcPhysicsMaterialAPI::GetTorsionalFrictionAttr() const {
+  return GetPrim().GetAttribute(MjcPhysicsTokens->mjcTorsionalfriction);
 }
 
-UsdAttribute MjcPhysicsSiteAPI::CreateGroupAttr(VtValue const &defaultValue,
-                                                bool writeSparsely) const {
+UsdAttribute MjcPhysicsMaterialAPI::CreateTorsionalFrictionAttr(
+    VtValue const &defaultValue, bool writeSparsely) const {
   return UsdSchemaBase::_CreateAttr(
-      MjcPhysicsTokens->mjcGroup, SdfValueTypeNames->Int,
+      MjcPhysicsTokens->mjcTorsionalfriction, SdfValueTypeNames->Double,
+      /* custom = */ false, SdfVariabilityUniform, defaultValue, writeSparsely);
+}
+
+UsdAttribute MjcPhysicsMaterialAPI::GetRollingFrictionAttr() const {
+  return GetPrim().GetAttribute(MjcPhysicsTokens->mjcRollingfriction);
+}
+
+UsdAttribute MjcPhysicsMaterialAPI::CreateRollingFrictionAttr(
+    VtValue const &defaultValue, bool writeSparsely) const {
+  return UsdSchemaBase::_CreateAttr(
+      MjcPhysicsTokens->mjcRollingfriction, SdfValueTypeNames->Double,
       /* custom = */ false, SdfVariabilityUniform, defaultValue, writeSparsely);
 }
 
@@ -97,10 +108,11 @@ static inline TfTokenVector _ConcatenateAttributeNames(
 }  // namespace
 
 /*static*/
-const TfTokenVector &MjcPhysicsSiteAPI::GetSchemaAttributeNames(
+const TfTokenVector &MjcPhysicsMaterialAPI::GetSchemaAttributeNames(
     bool includeInherited) {
   static TfTokenVector localNames = {
-      MjcPhysicsTokens->mjcGroup,
+      MjcPhysicsTokens->mjcTorsionalfriction,
+      MjcPhysicsTokens->mjcRollingfriction,
   };
   static TfTokenVector allNames = _ConcatenateAttributeNames(
       UsdAPISchemaBase::GetSchemaAttributeNames(true), localNames);
